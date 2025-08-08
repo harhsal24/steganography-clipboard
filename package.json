@@ -10,24 +10,36 @@
   "author": "",
   "license": "ISC",
   "description": "",
+
   "dependencies": {
-    "canvas": "^3.1.2",
+    "canvas": "^3.1.2"
+  },
+   "devDependencies": {
     "electron": "^37.2.6",
     "electron-builder": "^26.0.12"
   },
   "build": {
-    "appId": "com.yourcompany.steganography-clipboard",
+    "appId": "com.HB.steganography-clipboard",
     "productName": "Steganography Clipboard",
     "directories": {
       "output": "dist"
     },
     "files": [
-      "**/*",
-      "!**/node_modules/**/*"
+      "main.js",
+      "preload.js",
+      "renderer.js",
+      "steganography.js",
+      "index.html",
+      "assets/**/*",
+      "!node_modules"
     ],
     "win": {
       "target": "nsis",
       "icon": "assets/icon.ico"
+    },
+     "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
     }
   }
 }

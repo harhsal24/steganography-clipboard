@@ -6,25 +6,30 @@ const { embedTextInImage, extractTextFromBuffer } = require('./steganography');
 
 let tray = null;
 let mainWindow = null;
-let settings = {
+// --- Default Settings Object with New Options ---
+const defaultSettings = {
+  imageSize: { width: 800, height: 450 },
+  autoSize: false,
+  aspectRatio: '1.777', // 16:9
+  backgroundPattern: 'random',
   showTextOnImage: true,
+  dynamicFontSize: true,
   textPosition: 'center',
-  textBackgroundColor: 'rgba(0,0,0,0.7)',
   textColor: '#FFFFFF',
-  fontSize: 20, // Base font size
-  textShadow: true,        // 👈 NEW: Enable text shadow
-  roundedBackground: true, // 👈 NEW: Rounded background
-  dynamicFontSize: true,   // 👈 NEW: Enable dynamic sizing
+  randomTextColor: false,
+  textBackgroundColor: 'rgba(0,0,0,0.7)',
+  randomTextBgColor: false,
+  textShadow: true,
+  roundedBackground: true,
+  fontSize: 24,
   cornerIcons: true,
-  iconShapes: ['circle', 'square'],
-  iconColors: ['#FF6B6B', '#4ECDC4'],
-  backgroundPattern: 'gradient',
+  randomizeIconPositions: false,
+  iconShapes: ['circle', 'square', 'triangle'],
+  iconColors: ['#FF6B6B', '#4ECDC4', '#45B7D1', '#F39C12', '#E74C3C'],
   compressionLevel: 6,
-  imageSize: { width: 600, height: 400 },
-
-  // Add to settings object
-textStyle: 'bold', // 'normal', 'bold', 'italic'
 };
+
+let settings = { ...defaultSettings };
 
 // Load settings from file
 function loadSettings() {
@@ -32,11 +37,42 @@ function loadSettings() {
     const settingsPath = path.join(__dirname, 'settings.json');
     if (fs.existsSync(settingsPath)) {
       const data = fs.readFileSync(settingsPath, 'utf8');
-      settings = { ...settings, ...JSON.parse(data) };
+      settings = { ...defaultSettings, ...JSON.parse(data) };
     }
   } catch (error) {
     console.error('Error loading settings:', error);
   }
+}
+
+/**
+ * Checks if a hex color is perceived as dark.
+ * @param {string} hex - The hex color code (e.g., "#RRGGBB").
+ * @returns {boolean} True if the color is dark.
+ */
+function isColorDark(hex) {
+  const [r, g, b] = hex.match(/\w\w/g).map(x => parseInt(x, 16));
+  // Using the luminance formula
+  const luminance = (0.299 * r + 0.587 * g + 0.114 * b);
+  return luminance < 128;
+}
+
+/**
+ * Generates a random background color and a text color with high contrast.
+ * @returns {{bgColor: string, textColor: string}}
+ */
+function getRandomHighContrastColors() {
+    const lightColors = ['#FFFFFF', '#F2F2F2', '#E6E6E6'];
+    const darkColors = ['#000000', '#1A1A1A', '#2C2C2C'];
+    
+    // Generate a truly random background color
+    const randomBg = '#' + Math.floor(Math.random()*16777215).toString(16).padStart(6, '0');
+    
+    // Pick text color from predefined palettes for guaranteed contrast
+    const textColor = isColorDark(randomBg)
+        ? lightColors[Math.floor(Math.random() * lightColors.length)]
+        : darkColors[Math.floor(Math.random() * darkColors.length)];
+        
+    return { bgColor: randomBg, textColor: textColor };
 }
 
 // Save settings to file
@@ -304,45 +340,22 @@ function getOptimalFontSize(text, maxWidth, canvasSize = { width: 600, height: 4
 
 function drawTextOnImage(ctx, canvas, text) {
   if (!settings.showTextOnImage || !text) return;
+
+  const fontSize = settings.dynamicFontSize ? getOptimalFontSize(text, maxWidth, { width: canvas.width, height: canvas.height }) : settings.fontSize;
+  ctx.font = `bold ${fontSize}px Arial, sans-serif`;
   
-  const maxWidth = canvas.width - 100;
+  const lines = wrapText(ctx, text, canvas.width - 100); // Helper to wrap text
   
-  // ✅ CHECK IF DYNAMIC FONT SIZE IS ENABLED
-  const fontSize = settings.dynamicFontSize ? 
-    getOptimalFontSize(text, maxWidth, { width: canvas.width, height: canvas.height }) : 
-    settings.fontSize;
+  // FIXED: Overflow issue by calculating background size from actual text metrics.
+  const longestLine = lines.reduce((a, b) => (ctx.measureText(a).width > ctx.measureText(b).width) ? a : b);
+  const textMetrics = ctx.measureText(longestLine);
+  const textBlockWidth = textMetrics.width;
   
-  ctx.font = `${settings.textStyle || 'bold'} ${fontSize}px Arial, sans-serif`;
-  
-  // Split text into lines that fit within maxWidth
-  const words = text.split(' ');
-  const lines = [];
-  let currentLine = '';
-  
-  words.forEach(word => {
-    const testLine = currentLine + (currentLine ? ' ' : '') + word;
-    const metrics = ctx.measureText(testLine);
-    if (metrics.width > maxWidth && currentLine) {
-      lines.push(currentLine);
-      currentLine = word;
-    } else {
-      currentLine = testLine;
-    }
-  });
-  if (currentLine) lines.push(currentLine);
-  
-  // Limit lines based on font size
-  const maxLines = fontSize > 30 ? 3 : 4; // ✅ FIXED: use fontSize instead of optimalFontSize
-  const displayLines = lines.slice(0, maxLines);
-  if (lines.length > maxLines) {
-    displayLines[maxLines - 1] = displayLines[maxLines - 1] + '...';
-  }
-  
-  const lineHeight = fontSize + 8; // ✅ FIXED: use fontSize instead of optimalFontSize
-  const totalTextHeight = displayLines.length * lineHeight;
-  const padding = Math.max(20, fontSize / 2); // ✅ FIXED: use fontSize instead of optimalFontSize
-  const backgroundHeight = totalTextHeight + (padding * 2);
-  
+  const lineHeight = fontSize * 1.2;
+  const padding = fontSize; // Generous padding
+  const backgroundWidth = textBlockWidth + (padding * 2);
+  const backgroundHeight = (lines.length * lineHeight) + (padding * 2);
+
   let startY;
   switch (settings.textPosition) {
     case 'top':
@@ -365,10 +378,39 @@ function drawTextOnImage(ctx, canvas, text) {
     ctx.fillRect(50, startY, canvas.width - 100, backgroundHeight);
   }
   
-  // Draw text with shadow for better readability
-  ctx.fillStyle = settings.textColor;
-  ctx.textAlign = 'center';
+  // NEW: Random color logic
+  let textColor = settings.textColor;
+  let textBgColor = settings.textBackgroundColor;
+
+  if (settings.randomTextBgColor || settings.randomTextColor) {
+      const { bgColor, textColor: highContrastColor } = getRandomHighContrastColors();
+      if (settings.randomTextBgColor) {
+          const opacity = settings.textBackgroundColor.split(',')[3] || '0.7)';
+          const rgb = bgColor.match(/\w\w/g).map(x => parseInt(x, 16));
+          textBgColor = `rgba(${rgb[0]},${rgb[1]},${rgb[2]},${opacity}`;
+      }
+      if (settings.randomTextColor) {
+          textColor = highContrastColor;
+      }
+  }
+  
+  // Draw background with calculated size
+  if (settings.roundedBackground) {
+      drawRoundedRect(ctx, (canvas.width - backgroundWidth) / 2, startY, backgroundWidth, backgroundHeight, 15, textBgColor);
+  } else {
+      ctx.fillStyle = textBgColor;
+      ctx.fillRect((canvas.width - backgroundWidth) / 2, startY, backgroundWidth, backgroundHeight);
+  }
+
+  // Draw text
+  ctx.fillStyle = textColor;
+    ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
+
+  lines.forEach((line, index) => {
+    ctx.fillText(line, canvas.width / 2, startY + padding + (index * lineHeight) + (lineHeight / 2));
+  });
+
   
   // Add text shadow if enabled
   if (settings.textShadow) {
@@ -391,6 +433,25 @@ function drawTextOnImage(ctx, canvas, text) {
   
   // ✅ FIXED: use fontSize instead of optimalFontSize
   console.log(`Text: "${text.substring(0, 30)}..." | Length: ${text.length} | Font Size: ${fontSize}px | Dynamic: ${settings.dynamicFontSize}`);
+}
+
+// NEW: Helper for drawTextOnImage
+function wrapText(ctx, text, maxWidth) {
+    const words = text.split(' ');
+    const lines = [];
+    let currentLine = words[0];
+    for (let i = 1; i < words.length; i++) {
+        const word = words[i];
+        const width = ctx.measureText(currentLine + " " + word).width;
+        if (width < maxWidth) {
+            currentLine += " " + word;
+        } else {
+            lines.push(currentLine);
+            currentLine = word;
+        }
+    }
+    lines.push(currentLine);
+    return lines;
 }
 
 // Helper function for rounded rectangles
@@ -557,6 +618,29 @@ async function processClipboard() {
     if (text.length > 2000) {
       showNotification('❌ Text too long (max 2000 characters)', 'error');
       return;
+    }
+
+     let canvasWidth, canvasHeight;
+
+    // NEW: Auto-size logic
+    if (settings.autoSize) {
+        const charCount = text.length;
+        // Formula: Start with a base area, then add area per character.
+        const baseArea = 800 * 450;
+        const extraArea = charCount * 400; // Adjust this multiplier to control growth
+        const totalArea = baseArea + extraArea;
+        
+        const aspectRatio = parseFloat(settings.aspectRatio);
+        
+        canvasHeight = Math.sqrt(totalArea / aspectRatio);
+        canvasWidth = canvasHeight * aspectRatio;
+
+        // Enforce min/max dimensions
+        canvasWidth = Math.max(600, Math.min(canvasWidth, 1920));
+        canvasHeight = Math.max(400, Math.min(canvasHeight, 1080));
+    } else {
+        canvasWidth = settings.imageSize.width;
+        canvasHeight = settings.imageSize.height;
     }
     
     showNotification('🔄 Processing...', 'info');
@@ -725,17 +809,11 @@ function showNotification(message, type = 'info') {
 }
 
 // IPC Handlers - Define once only
-ipcMain.handle('update-settings', async (event, newSettings) => {
-  try {
-    settings = { ...settings, ...newSettings };
+ipcMain.handle('update-settings', (event, newSettings) => {
+    // If null, reset to defaults. Otherwise, merge with current settings.
+    settings = newSettings === null ? { ...defaultSettings } : { ...settings, ...newSettings };
     saveSettings();
-    showNotification('💾 Settings saved successfully!', 'success');
     return settings;
-  } catch (error) {
-    console.error('Error updating settings:', error);
-    showNotification('❌ Error saving settings', 'error');
-    throw error;
-  }
 });
 
 ipcMain.handle('get-settings', async () => {

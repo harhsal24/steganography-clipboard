@@ -5,502 +5,276 @@
     <meta charset="UTF-8">
     <title>Steganography Clipboard Tool</title>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            padding: 20px;
-        }
-
-        .container {
-            max-width: 460px;
-            margin: 0 auto;
-            background: white;
-            border-radius: 16px;
-            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
-            overflow: hidden;
-        }
-
-        .header {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 25px;
-            text-align: center;
-        }
-
-        .header h1 {
-            font-size: 24px;
-            margin-bottom: 8px;
-        }
-
-        .header .subtitle {
-            font-size: 14px;
-            opacity: 0.9;
-        }
-
-        .content {
-            padding: 25px;
-        }
-
-        .tab-nav {
-            display: flex;
-            border-bottom: 2px solid #e9ecef;
-            margin-bottom: 25px;
-        }
-
-        .tab-button {
-            flex: 1;
-            padding: 12px 16px;
-            background: none;
-            border: none;
-            cursor: pointer;
-            font-size: 14px;
-            font-weight: 600;
-            color: #6c757d;
-            transition: all 0.3s ease;
-        }
-
-        .tab-button.active {
-            color: #667eea;
-            border-bottom: 2px solid #667eea;
-        }
-
-        .tab-content {
-            display: none;
-        }
-
-        .tab-content.active {
-            display: block;
-        }
-
-        .shortcut-card {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 20px;
-            border-radius: 12px;
-            margin: 20px 0;
-            text-align: center;
-        }
-
-        .shortcut-card strong {
-            font-size: 18px;
-            display: block;
-            margin-bottom: 8px;
-        }
-
-        .status {
-            padding: 12px 15px;
-            border-radius: 8px;
-            margin: 15px 0;
-            font-size: 14px;
-            border-left: 4px solid;
-        }
-
-        .status.success {
-            background-color: #d4edda;
-            color: #155724;
-            border-left-color: #28a745;
-        }
-
-        .status.error {
-            background-color: #f8d7da;
-            color: #721c24;
-            border-left-color: #dc3545;
-        }
-
-        .status.info {
-            background-color: #d1ecf1;
-            color: #0c5460;
-            border-left-color: #17a2b8;
-        }
-
-        .file-drop-zone {
-            border: 2px dashed #667eea;
-            border-radius: 12px;
-            padding: 40px 20px;
-            text-align: center;
-            margin: 20px 0;
-            background-color: #f8f9ff;
-            cursor: pointer;
-            transition: all 0.3s ease;
-        }
-
-        .file-drop-zone:hover {
-            border-color: #764ba2;
-            background-color: #f0f0ff;
-        }
-
-        .file-drop-zone.drag-over {
-            border-color: #28a745;
-            background-color: #e8f5e8;
-        }
-
-        .file-input {
-            display: none;
-        }
-
-        .btn {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            border: none;
-            padding: 12px 24px;
-            border-radius: 8px;
-            cursor: pointer;
-            font-size: 14px;
-            font-weight: 600;
-            margin: 8px 4px;
-            transition: transform 0.2s ease;
-        }
-
-        .btn:hover {
-            transform: translateY(-2px);
-        }
-
-        .btn-secondary {
-            background: #6c757d;
-        }
-
-        .form-group {
-            margin: 15px 0;
-        }
-
-        .form-label {
-            display: block;
-            font-weight: 600;
-            margin-bottom: 5px;
-            color: #495057;
-        }
-
-        .form-control {
-            width: 100%;
-            padding: 10px 12px;
-            border: 2px solid #e9ecef;
-            border-radius: 6px;
-            font-size: 14px;
-            transition: border-color 0.3s ease;
-        }
-
-        .form-control:focus {
-            outline: none;
-            border-color: #667eea;
-        }
-
-        select.form-control {
-            height: 42px;
-        }
-
-        .checkbox-group {
-            display: flex;
-            align-items: center;
-            margin: 10px 0;
-        }
-
-        .checkbox-group input[type="checkbox"] {
-            margin-right: 8px;
-        }
-
-        .color-input {
-            width: 50px;
-            height: 35px;
-            border: none;
-            border-radius: 6px;
-            cursor: pointer;
-        }
-
-        .icon-preview {
-            display: inline-block;
-            width: 30px;
-            height: 30px;
-            margin: 5px;
-            border: 2px solid #e9ecef;
-            border-radius: 4px;
-            position: relative;
-        }
-
-        .results-card {
-            background-color: #f8f9fa;
-            padding: 20px;
-            border-radius: 12px;
-            margin: 20px 0;
-            border: 1px solid #dee2e6;
-        }
-
-        .results-card h3 {
-            margin-bottom: 15px;
-            color: #495057;
-            font-size: 18px;
-        }
-
-        .text-preview {
-            background: white;
-            border: 1px solid #e9ecef;
-            border-radius: 6px;
-            padding: 12px;
-            font-family: monospace;
-            font-size: 12px;
-            max-height: 150px;
-            overflow-y: auto;
-            white-space: pre-wrap;
-            word-break: break-word;
-        }
-
-        .stats {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 15px;
-            margin: 15px 0;
-        }
-
-        .stat-item {
-            text-align: center;
-            padding: 12px;
-            background: white;
-            border-radius: 8px;
-            border: 1px solid #e9ecef;
-        }
-
-        .stat-value {
-            font-size: 18px;
-            font-weight: bold;
-            color: #667eea;
-        }
-
-        .stat-label {
-            font-size: 12px;
-            color: #6c757d;
-            margin-top: 4px;
-        }
-
-        .range-input {
-            width: 100%;
-            margin: 10px 0;
-        }
-
-        .range-value {
-            display: inline-block;
-            min-width: 30px;
-            text-align: center;
-            font-weight: bold;
-            color: #667eea;
-        }
-
-        .icon-shapes-grid {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 10px;
-            margin: 10px 0;
-        }
-
-        .shape-option {
-            display: flex;
-            align-items: center;
-            padding: 8px;
-            border: 2px solid #e9ecef;
-            border-radius: 6px;
-            cursor: pointer;
-            transition: all 0.3s ease;
-        }
-
-        .shape-option:hover {
-            border-color: #667eea;
-        }
-
-        .shape-option.selected {
-            border-color: #667eea;
-            background-color: #f8f9ff;
-        }
-
-        .shape-option input {
-            margin-right: 8px;
-        }
-
-        .info-box {
-            background-color: #e7f3ff;
-            border: 1px solid #b8daff;
-            border-radius: 8px;
-            padding: 15px;
-            margin: 15px 0;
-        }
-
-        .info-box .title {
-            font-weight: bold;
-            color: #004085;
-            margin-bottom: 8px;
-        }
-
-        .info-box ul {
-            margin: 8px 0;
-            padding-left: 20px;
-        }
-
-        .info-box li {
-            font-size: 13px;
-            color: #004085;
-            margin: 4px 0;
-        }
-
-        /* Enhanced Extract Tab Styles */
-        .extract-container {
-            max-width: 100%;
-        }
-
-        .image-upload-section {
-            margin: 20px 0;
-        }
-
-        .file-drop-zone {
-            position: relative;
-            border: 2px dashed #667eea;
-            border-radius: 12px;
-            padding: 40px 20px;
-            text-align: center;
-            margin: 20px 0;
-            background-color: #f8f9ff;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            min-height: 200px;
-        }
-
-        .file-drop-zone:hover {
-            border-color: #764ba2;
-            background-color: #f0f0ff;
-            transform: translateY(-2px);
-        }
-
-        .file-drop-zone.drag-over {
-            border-color: #28a745;
-            background-color: #e8f5e8;
-            border-style: solid;
-        }
-
-        .drop-content {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .drop-title {
-            font-weight: bold;
-            margin-bottom: 5px;
-            font-size: 16px;
-            color: #495057;
-        }
-
-        .drop-subtitle {
-            font-size: 12px;
-            color: #6c757d;
-            margin-bottom: 10px;
-        }
-
-        .paste-hint {
-            font-size: 11px;
-            color: #667eea;
-            margin-top: 8px;
-            padding: 5px 10px;
-            background-color: rgba(102, 126, 234, 0.1);
-            border-radius: 15px;
-        }
-
-        .image-preview {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            padding: 20px;
-        }
-
-        .image-preview img {
-            max-width: 100%;
-            max-height: 300px;
-            border-radius: 8px;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-            margin-bottom: 15px;
-            object-fit: contain;
-        }
-
-        .image-info {
-            text-align: center;
-            margin-bottom: 15px;
-        }
-
-        .image-name {
-            font-weight: bold;
-            color: #495057;
-            margin-bottom: 5px;
-        }
-
-        .image-details {
-            font-size: 12px;
-            color: #6c757d;
-        }
-
-        .preview-actions {
-            display: flex;
-            gap: 10px;
-            justify-content: center;
-        }
-
-        .btn-small {
-            padding: 8px 16px;
-            font-size: 12px;
-            border-radius: 6px;
-            border: none;
-            cursor: pointer;
-            font-weight: 600;
-            transition: all 0.2s ease;
-        }
-
-        .btn-small.btn-secondary {
-            background-color: #6c757d;
-            color: white;
-        }
-
-        .btn-small:not(.btn-secondary) {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-        }
-
-        .btn-small:hover {
-            transform: translateY(-1px);
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-        }
-
-        /* Processing states */
-        .file-drop-zone.processing {
-            border-color: #ffc107;
-            background-color: #fff8e1;
-        }
-
-        .file-drop-zone.processing::after {
-            content: '🔄 Processing...';
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            background-color: rgba(255, 193, 7, 0.9);
-            color: #856404;
-            padding: 10px 20px;
-            border-radius: 20px;
-            font-weight: bold;
-            font-size: 14px;
-            z-index: 10;
-        }
-
-        .file-drop-zone.success {
-            border-color: #28a745;
-            background-color: #e8f5e8;
-        }
-
-        .file-drop-zone.error {
-            border-color: #dc3545;
-            background-color: #f8e8e8;
-        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; padding: 20px; }
+        .container { max-width: 460px; margin: 0 auto; background: white; border-radius: 16px; box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1); overflow: hidden; }
+        .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 25px; text-align: center; }
+        .header h1 { font-size: 24px; margin-bottom: 8px; }
+        .header .subtitle { font-size: 14px; opacity: 0.9; }
+        .content { padding: 25px; }
+        .tab-nav { display: flex; border-bottom: 2px solid #e9ecef; margin-bottom: 25px; }
+        .tab-button { flex: 1; padding: 12px 16px; background: none; border: none; cursor: pointer; font-size: 14px; font-weight: 600; color: #6c757d; transition: all 0.3s ease; }
+        .tab-button.active { color: #667eea; border-bottom: 2px solid #667eea; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        .shortcut-card { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; border-radius: 12px; margin: 20px 0; text-align: center; }
+        .shortcut-card strong { font-size: 18px; display: block; margin-bottom: 8px; }
+        .status { padding: 12px 15px; border-radius: 8px; margin: 15px 0; font-size: 14px; border-left: 4px solid; }
+        .status.success { background-color: #d4edda; color: #155724; border-left-color: #28a745; }
+        .status.error { background-color: #f8d7da; color: #721c24; border-left-color: #dc3545; }
+        .status.info { background-color: #d1ecf1; color: #0c5460; border-left-color: #17a2b8; }
+        .file-drop-zone { border: 2px dashed #667eea; border-radius: 12px; padding: 40px 20px; text-align: center; margin: 20px 0; background-color: #f8f9ff; cursor: pointer; transition: all 0.3s ease; min-height: 200px; position: relative; }
+        .file-drop-zone:hover { border-color: #764ba2; background-color: #f0f0ff; }
+        .file-drop-zone.drag-over { border-color: #28a745; background-color: #e8f5e8; }
+        .file-input { display: none; }
+        .btn { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; padding: 12px 24px; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 600; margin: 8px 4px; transition: transform 0.2s ease; }
+        .btn:hover { transform: translateY(-2px); }
+        .btn-secondary { background: #6c757d; }
+        .form-group { margin: 15px 0; }
+        .form-label { display: block; font-weight: 600; margin-bottom: 5px; color: #495057; }
+        .form-control { width: 100%; padding: 10px 12px; border: 2px solid #e9ecef; border-radius: 6px; font-size: 14px; transition: border-color 0.3s ease; }
+        .form-control:focus { outline: none; border-color: #667eea; }
+        .form-control:disabled { background-color: #e9ecef; cursor: not-allowed; }
+        select.form-control { height: 42px; }
+        .checkbox-group { display: flex; align-items: center; margin: 10px 0; }
+        .checkbox-group input[type="checkbox"] { margin-right: 8px; }
+        .color-input { width: 50px; height: 35px; border: none; border-radius: 6px; cursor: pointer; }
+        .color-input:disabled { cursor: not-allowed; opacity: 0.5; }
+        .results-card { background-color: #f8f9fa; padding: 20px; border-radius: 12px; margin: 20px 0; border: 1px solid #dee2e6; }
+        .results-card h3 { margin-bottom: 15px; color: #495057; font-size: 18px; }
+        .text-preview { background: white; border: 1px solid #e9ecef; border-radius: 6px; padding: 12px; font-family: monospace; font-size: 12px; max-height: 150px; overflow-y: auto; white-space: pre-wrap; word-break: break-word; }
+        .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin: 15px 0; }
+        .stat-item { text-align: center; padding: 12px; background: white; border-radius: 8px; border: 1px solid #e9ecef; }
+        .stat-value { font-size: 18px; font-weight: bold; color: #667eea; }
+        .stat-label { font-size: 12px; color: #6c757d; margin-top: 4px; }
+        .range-input { width: 100%; margin: 10px 0; }
+        .range-value { display: inline-block; min-width: 30px; text-align: center; font-weight: bold; color: #667eea; }
+        .icon-shapes-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 10px 0; }
+        .shape-option { display: flex; align-items: center; padding: 8px; border: 2px solid #e9ecef; border-radius: 6px; cursor: pointer; transition: all 0.3s ease; }
+        .shape-option:hover { border-color: #667eea; }
+        .shape-option.selected { border-color: #667eea; background-color: #f8f9ff; }
+        .shape-option input { margin-right: 8px; }
+        .info-box { background-color: #e7f3ff; border: 1px solid #b8daff; border-radius: 8px; padding: 15px; margin: 15px 0; }
+        .info-box .title { font-weight: bold; color: #004085; margin-bottom: 8px; }
+        .info-box ul { margin: 8px 0; padding-left: 20px; }
+        .info-box li { font-size: 13px; color: #004085; margin: 4px 0; }
+        .extract-container { max-width: 100%; }
+        .image-upload-section { margin: 20px 0; }
+        .file-drop-zone.drag-over { border-style: solid; }
+        .drop-content { display: flex; flex-direction: column; align-items: center; justify-content: center; }
+        .drop-title { font-weight: bold; margin-bottom: 5px; font-size: 16px; color: #495057; }
+        .drop-subtitle { font-size: 12px; color: #6c757d; margin-bottom: 10px; }
+        .paste-hint { font-size: 11px; color: #667eea; margin-top: 8px; padding: 5px 10px; background-color: rgba(102, 126, 234, 0.1); border-radius: 15px; }
+        .image-preview { display: none; flex-direction: column; align-items: center; padding: 20px; }
+        .image-preview img { max-width: 100%; max-height: 300px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15); margin-bottom: 15px; object-fit: contain; }
+        .image-info { text-align: center; margin-bottom: 15px; }
+        .image-name { font-weight: bold; color: #495057; margin-bottom: 5px; }
+        .image-details { font-size: 12px; color: #6c757d; }
+        .preview-actions { display: flex; gap: 10px; justify-content: center; }
+        .btn-small { padding: 8px 16px; font-size: 12px; border-radius: 6px; border: none; cursor: pointer; font-weight: 600; transition: all 0.2s ease; }
+        .btn-small.btn-secondary { background-color: #6c757d; color: white; }
+        .btn-small:not(.btn-secondary) { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; }
+        .btn-small:hover { transform: translateY(-1px); box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2); }
+        .file-drop-zone.processing, .file-drop-zone.success, .file-drop-zone.error { border-style: solid; }
+        /*
+=================================
+Windows Electron Optimized Scrollbar Styling
+=================================
+*/
+
+/* Main scrollbar styling - optimized for Windows desktop */
+::-webkit-scrollbar {
+    width: 14px;  /* Slightly wider for desktop use */
+    height: 14px;
+}
+
+::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 10px;
+    /* Windows-like inner shadow */
+    box-shadow: inset 0 0 6px rgba(0, 0, 0, 0.1);
+    margin: 2px;
+}
+
+::-webkit-scrollbar-thumb {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-radius: 10px;
+    /* Windows-style border for better definition */
+    border: 2px solid rgba(255, 255, 255, 0.1);
+    background-clip: padding-box;
+    transition: all 0.2s ease;
+    /* Subtle shadow for depth */
+    box-shadow: 
+        0 2px 4px rgba(0, 0, 0, 0.1),
+        inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(135deg, #5a67d8 0%, #6b46a3 100%);
+    border-color: rgba(255, 255, 255, 0.2);
+    box-shadow: 
+        0 3px 8px rgba(0, 0, 0, 0.15),
+        inset 0 1px 0 rgba(255, 255, 255, 0.3);
+    /* Slight scale effect for modern feel */
+    transform: scaleX(1.1);
+}
+
+::-webkit-scrollbar-thumb:active {
+    background: linear-gradient(135deg, #4c51bf 0%, #553c9a 100%);
+    box-shadow: 
+        inset 0 2px 4px rgba(0, 0, 0, 0.2),
+        0 1px 3px rgba(0, 0, 0, 0.1);
+    transform: scaleX(1.05);
+}
+
+/* Corner styling for when both scrollbars are present */
+::-webkit-scrollbar-corner {
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 6px;
+}
+
+/* Scrollbar buttons (arrows) - Windows users expect these */
+::-webkit-scrollbar-button {
+    display: block;
+    height: 14px;
+    width: 14px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-button:hover {
+    background: rgba(102, 126, 234, 0.2);
+}
+
+/* Text preview areas - smaller, more subtle */
+.text-preview::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+}
+
+.text-preview::-webkit-scrollbar-track {
+    background: rgba(233, 236, 239, 0.4);
+    border-radius: 8px;
+    margin: 1px;
+}
+
+.text-preview::-webkit-scrollbar-thumb {
+    background: linear-gradient(135deg, #a9a1e4 0%, #b8aee8 100%);
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.6);
+    transition: all 0.2s ease;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.text-preview::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(135deg, #967fe0 0%, #a598e4 100%);
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.15);
+    transform: scaleX(1.1);
+}
+
+.text-preview::-webkit-scrollbar-button {
+    display: none; /* Hide arrows on small text areas */
+}
+
+/* Container and content area scrollbars */
+.container::-webkit-scrollbar,
+.content::-webkit-scrollbar {
+    width: 12px;
+}
+
+.container::-webkit-scrollbar-thumb,
+.content::-webkit-scrollbar-thumb {
+    background: linear-gradient(135deg, rgba(102, 126, 234, 0.7) 0%, rgba(118, 75, 162, 0.7) 100%);
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    transition: all 0.2s ease;
+}
+
+.container::-webkit-scrollbar-thumb:hover,
+.content::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(135deg, rgba(102, 126, 234, 0.9) 0%, rgba(118, 75, 162, 0.9) 100%);
+    transform: scaleX(1.08);
+}
+
+/* Results cards and info boxes */
+.results-card::-webkit-scrollbar,
+.info-box::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+.results-card::-webkit-scrollbar-thumb,
+.info-box::-webkit-scrollbar-thumb {
+    background: linear-gradient(135deg, #c8c3f0 0%, #d1cef3 100%);
+    border-radius: 6px;
+    border: 1px solid rgba(255, 255, 255, 0.4);
+}
+
+.results-card::-webkit-scrollbar-thumb:hover,
+.info-box::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(135deg, #b5aeed 0%, #c4c1f0 100%);
+}
+
+/* Windows-specific smooth scrolling */
+html {
+    scroll-behavior: smooth;
+    /* Enable smooth scrolling for Windows */
+    -ms-scroll-snap-type: y mandatory;
+    scroll-snap-type: y mandatory;
+}
+
+/* Custom animation for scrollbar appearance */
+@keyframes windowsScrollbarFadeIn {
+    from {
+        opacity: 0;
+        transform: scaleX(0.8);
+    }
+    to {
+        opacity: 1;
+        transform: scaleX(1);
+    }
+}
+
+::-webkit-scrollbar-thumb {
+    animation: windowsScrollbarFadeIn 0.3s ease-out;
+}
+
+/* Dark mode adaptation for Windows (if needed) */
+@media (prefers-color-scheme: dark) {
+    ::-webkit-scrollbar-track {
+        background: rgba(0, 0, 0, 0.1);
+        box-shadow: inset 0 0 6px rgba(255, 255, 255, 0.05);
+    }
+    
+    .text-preview::-webkit-scrollbar-track {
+        background: rgba(0, 0, 0, 0.2);
+    }
+}
+
+/* High contrast mode support for Windows accessibility */
+@media (prefers-contrast: high) {
+    ::-webkit-scrollbar-thumb {
+        background: #000;
+        border: 2px solid #fff;
+    }
+    
+    ::-webkit-scrollbar-track {
+        background: #fff;
+        border: 1px solid #000;
+    }
+}
+
+/* Disable scrollbar animations if user prefers reduced motion */
+@media (prefers-reduced-motion: reduce) {
+    ::-webkit-scrollbar-thumb {
+        animation: none;
+        transition: none;
+    }
+    
+    ::-webkit-scrollbar-thumb:hover {
+        transform: none;
+    }
+}
     </style>
 </head>
 
@@ -510,7 +284,6 @@
             <h1>🔐 Steganography Tool</h1>
             <div class="subtitle">Hide & Extract Text in Images</div>
         </div>
-
         <div class="content">
             <div class="tab-nav">
                 <button class="tab-button active" onclick="switchTab('main')">🏠 Main</button>
@@ -518,7 +291,7 @@
                 <button class="tab-button" onclick="switchTab('settings')">⚙️ Settings</button>
             </div>
 
-            <!-- Main Tab -->
+             <!-- Main Tab -->
             <div id="main-tab" class="tab-content active">
                 <div class="shortcut-card">
                     <strong>Ctrl + Shift + V</strong>
@@ -626,15 +399,27 @@
             <div id="settings-tab" class="tab-content">
                 <h3>⚙️ Customization Settings</h3>
 
-                <!-- Image Settings -->
-                <div class="form-group">
-                    <label class="form-label">🖼️ Image Size</label>
+                <!-- NEW: Image Size & Aspect Ratio -->
+                <div class="checkbox-group">
+                    <input type="checkbox" id="autoSize">
+                    <label for="autoSize">🖼️ Auto-calculate image size based on text length</label>
+                </div>
+                <div class="form-group" id="manualSizeGroup">
+                    <label class="form-label">Manual Image Size</label>
                     <div style="display: flex; gap: 10px;">
-                        <input type="number" id="imageWidth" class="form-control" placeholder="Width" value="600"
-                            min="400" max="1920">
-                        <input type="number" id="imageHeight" class="form-control" placeholder="Height" value="400"
-                            min="300" max="1080">
+                        <input type="number" id="imageWidth" class="form-control" value="600" min="100">
+                        <input type="number" id="imageHeight" class="form-control" value="400" min="100">
                     </div>
+                </div>
+                <div class="form-group" id="aspectRatioGroup" style="display: none;">
+                    <label class="form-label">Image Aspect Ratio</label>
+                    <select id="aspectRatio" class="form-control">
+                        <option value="1.777">16:9 (Widescreen)</option>
+                        <option value="1.333">4:3 (Standard)</option>
+                        <option value="1">1:1 (Square)</option>
+                        <option value="1.5">3:2 (Photography)</option>
+                        <option value="0.666">2:3 (Portrait)</option>
+                    </select>
                 </div>
 
                 <!-- Background Pattern -->
@@ -646,8 +431,6 @@
                         <option value="noise">Noise</option>
                         <option value="geometric">Geometric</option>
                         <option value="wave">Wave</option>
-                        <option value="circles">Circles</option>
-                        <option value="stripes">Stripes</option>
                     </select>
                 </div>
 
@@ -656,43 +439,39 @@
                     <input type="checkbox" id="showTextOnImage" checked>
                     <label for="showTextOnImage">📝 Show text on image (as subtitle)</label>
                 </div>
-
                 <div class="checkbox-group">
                     <input type="checkbox" id="dynamicFontSize" checked>
-                    <label for="dynamicFontSize">🔄 Dynamic font sizing (auto-adjust based on text length)</label>
+                    <label for="dynamicFontSize">🔄 Dynamic font sizing</label>
                 </div>
 
-                <div class="checkbox-group">
-                    <input type="checkbox" id="textShadow" checked>
-                    <label for="textShadow">✨ Text shadow (better readability)</label>
-                </div>
-
-                <div class="checkbox-group">
-                    <input type="checkbox" id="roundedBackground" checked>
-                    <label for="roundedBackground">🔘 Rounded background</label>
-                </div>
-
+                <!-- NEW: Random Color Options -->
                 <div class="form-group">
+                    <label class="form-label">🎨 Text Color</label>
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <input type="color" id="textColor" class="color-input" value="#FFFFFF">
+                        <input type="checkbox" id="randomTextColor">
+                        <label for="randomTextColor">Random (High Contrast)</label>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">🎭 Text Background</label>
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <input type="color" id="textBgColor" class="color-input" value="#000000">
+                        <input type="checkbox" id="randomTextBgColor">
+                        <label for="randomTextBgColor">Random</label>
+                    </div>
+                    <label style="margin-left: 10px;">Opacity:</label>
+                    <input type="range" id="textBgOpacity" class="range-input" min="0" max="100" value="70">
+                    <span class="range-value" id="textBgOpacityValue">70%</span>
+                </div>
+
+               <div class="form-group">
                     <label class="form-label">📍 Text Position</label>
                     <select id="textPosition" class="form-control">
                         <option value="top">Top</option>
                         <option value="center">Center</option>
                         <option value="bottom">Bottom</option>
                     </select>
-                </div>
-
-                <div class="form-group">
-                    <label class="form-label">🎨 Text Color</label>
-                    <input type="color" id="textColor" class="color-input" value="#FFFFFF">
-                </div>
-
-                <div class="form-group">
-                    <label class="form-label">🎭 Text Background</label>
-                    <input type="color" id="textBgColor" class="color-input" value="#000000">
-                    <label style="margin-left: 10px;">Opacity:</label>
-                    <input type="range" id="textBgOpacity" class="range-input" min="0" max="100" value="70"
-                        style="width: 100px; margin-left: 10px;">
-                    <span class="range-value" id="textBgOpacityValue">70%</span>
                 </div>
 
                 <div class="form-group">
@@ -706,7 +485,12 @@
                     <input type="checkbox" id="cornerIcons" checked>
                     <label for="cornerIcons">🎯 Show corner icons</label>
                 </div>
-
+                <!-- NEW: Random Icon Options -->
+                <div class="checkbox-group">
+                    <input type="checkbox" id="randomizeIconPositions">
+                    <label for="randomizeIconPositions">🔀 Randomize icon positions</label>
+                </div>
+         
                 <div class="form-group">
                     <label class="form-label">🔷 Icon Shapes (select multiple)</label>
                     <div class="icon-shapes-grid">
@@ -733,7 +517,7 @@
                     </div>
                 </div>
 
-                <div class="form-group">
+                  <div class="form-group">
                     <label class="form-label">🌈 Icon Colors</label>
                     <div style="display: flex; gap: 10px; flex-wrap: wrap;">
                         <input type="color" class="color-input icon-color" value="#FF6B6B">
@@ -743,14 +527,13 @@
                         <input type="color" class="color-input icon-color" value="#E74C3C">
                     </div>
                 </div>
-
-                <!-- Compression Settings -->
+                
+                <!-- [Compression and Buttons ] -->
                 <div class="form-group">
                     <label class="form-label">🗜️ PNG Compression Level</label>
                     <input type="range" id="compressionLevel" class="range-input" min="0" max="9" value="6">
                     <span class="range-value" id="compressionValue">6</span>
                 </div>
-
                 <div style="text-align: center; margin-top: 30px;">
                     <button class="btn" onclick="saveSettings()">💾 Save Settings</button>
                     <button class="btn btn-secondary" onclick="resetSettings()">🔄 Reset to Default</button>
@@ -765,11 +548,10 @@
                         <li>Multiple corner icons add visual variety</li>
                     </ul>
                 </div>
+                
             </div>
         </div>
     </div>
-
     <script src="renderer.js"></script>
 </body>
-
 </html>
