@@ -465,6 +465,29 @@ function copyExtractedText() {
     }
 }
 
+
+async function saveImageFromClipboard() {
+    const btn = document.getElementById('saveClipboardBtn');
+    const btnText = document.getElementById('saveBtnText');
+    const originalText = btnText.textContent;
+
+    // Provide immediate feedback on the button
+    btn.disabled = true;
+    btnText.textContent = '💾 Saving...';
+
+    try {
+        // Call the main process to handle everything
+        await window.electronAPI.saveClipboardImage();
+    } catch (error) {
+        // The main process will show the notification, but we can log it here too
+        console.error("Error invoking saveClipboardImage:", error);
+    } finally {
+        // Restore the button state
+        btn.disabled = false;
+        btnText.textContent = originalText;
+    }
+}
+
 // --- Expose functions to the window object for HTML onclick events ---
 window.switchTab = switchTab;
 window.extractFromClipboard = extractFromClipboard;
@@ -473,3 +496,4 @@ window.saveSettings = saveSettings;
 window.resetSettings = resetSettings;
 window.clearImagePreview = clearImagePreview;
 window.extractFromPreviewImage = extractFromPreviewImage;
+window.saveImageFromClipboard = saveImageFromClipboard;

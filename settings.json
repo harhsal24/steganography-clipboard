@@ -1,0 +1,36 @@
+{
+  "imageSize": {
+    "width": 800,
+    "height": 450
+  },
+  "autoSize": true,
+  "aspectRatio": "1.777",
+  "backgroundPattern": "random",
+  "showTextOnImage": true,
+  "dynamicFontSize": true,
+  "textPosition": "center",
+  "textColor": "#ffffff",
+  "randomTextColor": false,
+  "textBackgroundColor": "rgba(0,0,0,0.7)",
+  "randomTextBgColor": false,
+  "textShadow": true,
+  "roundedBackground": true,
+  "fontSize": 24,
+  "cornerIcons": true,
+  "randomizeIconPositions": true,
+  "iconShapes": [
+    "circle",
+    "square",
+    "triangle",
+    "diamond",
+    "star"
+  ],
+  "iconColors": [
+    "#ff6b6b",
+    "#4ecdc4",
+    "#45b7d1",
+    "#f39c12",
+    "#e74c3c"
+  ],
+  "compressionLevel": 6
+}

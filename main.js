@@ -3,88 +3,149 @@ const path = require('path');
 const fs = require('fs');
 const { createCanvas } = require('canvas');
 const { embedTextInImage, extractTextFromBuffer } = require('./steganography');
+const { spawn } = require('child_process');
+
+// ===================================================================
+// START: Command-Line Interface (CLI) Handler
+// ===================================================================
+
+/**
+ * Handles the command-line extraction process.
+ * This function runs in a "headless" mode without launching the GUI.
+ * @param {string} imagePath The path to the image file.
+ */
+// async function handleCliExtraction(imagePath) {
+//     if (!fs.existsSync(imagePath)) {
+//         console.error(`Error: File not found at path: ${imagePath}`);
+//         process.exit(1); // Exit with an error code
+//     }
+
+//     try {
+//         const imageBuffer = fs.readFileSync(imagePath);
+//         const result = await extractTextFromBuffer(imageBuffer);
+
+//         if (result.success) {
+//             console.log(result.text); // Print the decoded text to stdout
+//             process.exit(0); // Success
+//         } else {
+//             console.error(`Extraction failed: ${result.error}`);
+//             process.exit(1); // Error
+//         }
+//     } catch (error) {
+//         console.error(`A critical error occurred: ${error.message}`);
+//         process.exit(1); // Error
+//     }
+// }
+
+// ===================================================================
+// END : Command-Line Interface (CLI) Handler
+// ===================================================================
+
+async function handleCliExtraction(imagePath) {
+    return new Promise((resolve, reject) => {
+        const decoder = spawn('node', ['decoder.js', imagePath], {
+            stdio: ['inherit', 'pipe', 'pipe']
+        });
+        
+        let output = '';
+        let error = '';
+        
+        decoder.stdout.on('data', (data) => {
+            output += data.toString();
+        });
+        
+        decoder.stderr.on('data', (data) => {
+            error += data.toString();
+        });
+        
+        decoder.on('close', (code) => {
+            if (code === 0) {
+                console.log(output.trim());
+                resolve();
+            } else {
+                console.error(error.trim());
+                reject(new Error(error));
+            }
+        });
+    });
+}
 
 let tray = null;
 let mainWindow = null;
 // --- Default Settings Object with New Options ---
 const defaultSettings = {
-  imageSize: { width: 800, height: 450 },
-  autoSize: false,
-  aspectRatio: '1.777', // 16:9
-  backgroundPattern: 'random',
-  showTextOnImage: true,
-  dynamicFontSize: true,
-  textPosition: 'center',
-  textColor: '#FFFFFF',
-  randomTextColor: false,
-  textBackgroundColor: 'rgba(0,0,0,0.7)',
-  randomTextBgColor: false,
-  textShadow: true,
-  roundedBackground: true,
-  fontSize: 24,
-  cornerIcons: true,
-  randomizeIconPositions: false,
-  iconShapes: ['circle', 'square', 'triangle'],
-  iconColors: ['#FF6B6B', '#4ECDC4', '#45B7D1', '#F39C12', '#E74C3C'],
-  compressionLevel: 6,
+    imageSize: { width: 800, height: 450 },
+    autoSize: true,
+    aspectRatio: '1.777',
+    backgroundPattern: 'random',
+    showTextOnImage: true,
+    dynamicFontSize: true,
+    textPosition: 'center',
+    textColor: '#FFFFFF',
+    randomTextColor: false,
+    textBackgroundColor: 'rgba(0,0,0,0.7)',
+    randomTextBgColor: false,
+    textShadow: true,
+    roundedBackground: true,
+    fontSize: 24,
+    cornerIcons: true,
+    randomizeIconPositions: false,
+    iconShapes: ['circle', 'square', 'triangle', 'diamond', 'star'],
+    iconColors: ['#FF6B6B', '#4ECDC4', '#45B7D1', '#F39C12', '#E74C3C'],
+    compressionLevel: 6,
 };
 
 let settings = { ...defaultSettings };
 
+// --- Settings Management (Using Best Practices) ---
+function getSettingsPath() {
+    return path.join(app.getPath('userData'), 'settings.json');
+}
+
 // Load settings from file
 function loadSettings() {
-  try {
-    const settingsPath = path.join(__dirname, 'settings.json');
-    if (fs.existsSync(settingsPath)) {
-      const data = fs.readFileSync(settingsPath, 'utf8');
-      settings = { ...defaultSettings, ...JSON.parse(data) };
+    try {
+        const settingsPath = getSettingsPath();
+        if (fs.existsSync(settingsPath)) {
+            const data = fs.readFileSync(settingsPath, 'utf8');
+            settings = { ...defaultSettings, ...JSON.parse(data) };
+        }
+    } catch (error) {
+        console.error('Error loading settings:', error);
     }
-  } catch (error) {
-    console.error('Error loading settings:', error);
-  }
 }
 
-/**
- * Checks if a hex color is perceived as dark.
- * @param {string} hex - The hex color code (e.g., "#RRGGBB").
- * @returns {boolean} True if the color is dark.
- */
+// --- Color & Contrast Helpers ---
 function isColorDark(hex) {
-  const [r, g, b] = hex.match(/\w\w/g).map(x => parseInt(x, 16));
-  // Using the luminance formula
-  const luminance = (0.299 * r + 0.587 * g + 0.114 * b);
-  return luminance < 128;
+    if (!hex) return true;
+    const color = (hex.charAt(0) === '#') ? hex.substring(1, 7) : hex;
+    const r = parseInt(color.substring(0, 2), 16);
+    const g = parseInt(color.substring(2, 4), 16);
+    const b = parseInt(color.substring(4, 6), 16);
+    const luminance = (0.299 * r + 0.587 * g + 0.114 * b);
+    return luminance < 140;
 }
 
-/**
- * Generates a random background color and a text color with high contrast.
- * @returns {{bgColor: string, textColor: string}}
- */
 function getRandomHighContrastColors() {
     const lightColors = ['#FFFFFF', '#F2F2F2', '#E6E6E6'];
-    const darkColors = ['#000000', '#1A1A1A', '#2C2C2C'];
-    
-    // Generate a truly random background color
+    const darkColors = ['#0D0D0D', '#1A1A1A', '#2C2C2C'];
     const randomBg = '#' + Math.floor(Math.random()*16777215).toString(16).padStart(6, '0');
-    
-    // Pick text color from predefined palettes for guaranteed contrast
     const textColor = isColorDark(randomBg)
         ? lightColors[Math.floor(Math.random() * lightColors.length)]
         : darkColors[Math.floor(Math.random() * darkColors.length)];
-        
     return { bgColor: randomBg, textColor: textColor };
 }
 
+
 // Save settings to file
 function saveSettings() {
-  try {
-    const settingsPath = path.join(__dirname, 'settings.json');
-    fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2));
-  } catch (error) {
-    console.error('Error saving settings:', error);
-  }
+    try {
+        const settingsPath = getSettingsPath();
+        fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2));
+    } catch (error) {
+        console.error('Error saving settings:', error);
+    }
 }
-
 function createDefaultIcon() {
   const canvas = createCanvas(64, 64);
   const ctx = canvas.getContext('2d');
@@ -310,129 +371,148 @@ function drawStar(ctx, centerX, centerY, spikes, outerRadius, innerRadius) {
   ctx.closePath();
 }
 
-// Add this function after the other drawing functions
-function getOptimalFontSize(text, maxWidth, canvasSize = { width: 600, height: 400 }) {
-  const baseSize = settings.fontSize;
-  const canvasArea = canvasSize.width * canvasSize.height;
-  const scaleFactor = Math.sqrt(canvasArea / (600 * 400)); // Scale based on canvas size
-  
-  let optimalSize;
-  
-  // Dynamic sizing based on text length
-  if (text.length < 20) {
-    optimalSize = baseSize + 16; // Very short text = much bigger
-  } else if (text.length < 50) {
-    optimalSize = baseSize + 10; // Short text = bigger
-  } else if (text.length < 100) {
-    optimalSize = baseSize + 4;  // Medium text = slightly bigger
-  } else if (text.length < 200) {
-    optimalSize = baseSize;      // Long text = base size
-  } else {
-    optimalSize = baseSize - 4;  // Very long text = smaller
-  }
-  
-  // Apply canvas scale factor
-  optimalSize = Math.round(optimalSize * scaleFactor);
-  
-  // Ensure reasonable bounds
-  return Math.max(14, Math.min(optimalSize, 48));
+/**
+ * Calculates an optimal font size for the given text to fit nicely on the canvas.
+ * It considers the user's base font size, the length of the text, and the canvas width.
+ *
+ * @param {string} text The text that will be rendered.
+ * @param {number} canvasWidth The width of the canvas the text will be drawn on.
+ * @returns {number} The calculated optimal font size in pixels.
+ */
+function getOptimalFontSize(text, canvasWidth) {
+    // 1. If dynamic sizing is disabled in settings, just return the user's chosen size.
+    if (!settings.dynamicFontSize) {
+        return settings.fontSize;
+    }
+
+    const baseSize = settings.fontSize;
+    const textLength = text.length;
+
+    let size = baseSize;
+
+    // 2. Adjust size based on the length of the text.
+    // Shorter text gets a significant boost, while very long text is slightly reduced.
+    if (textLength < 50) {
+        size += 8; // Very short text, make it larger like a title.
+    } else if (textLength < 150) {
+        size += 4; // A short sentence, give it a small boost.
+    } else if (textLength > 400) {
+        size -= 4; // Long text, shrink it slightly to help it fit.
+    }
+    // For text between 150-400 characters, the base size is used.
+
+    // 3. Scale the font size relative to the canvas width.
+    // This prevents the font from looking tiny on a very large auto-sized canvas.
+    // We use Math.sqrt for a gentler scaling effect.
+    // A canvas width of 800px is our baseline (scale factor = 1).
+    const widthScaleFactor = Math.sqrt(canvasWidth / 800);
+
+    // We clamp the scaling factor to prevent ridiculously large fonts on huge images.
+    // Max scale of 1.5 means the font can't get more than 50% bigger due to canvas size alone.
+    const clampedScaleFactor = Math.min(1.5, widthScaleFactor);
+
+    size *= clampedScaleFactor;
+
+    // 4. Enforce absolute minimum and maximum font sizes and return a whole number.
+    // This ensures readability (not too small) and prevents layout chaos (not too big).
+    const minFontSize = 14;
+    const maxFontSize = 72; // A generous max size is okay since the background resizes.
+
+    return Math.round(Math.max(minFontSize, Math.min(size, maxFontSize)));
 }
 
+/**
+ * Draws the text block (background and text) onto the canvas.
+ * This function handles text wrapping, dynamic font sizing, and color randomization.
+ *
+ * @param {CanvasRenderingContext2D} ctx The 2D rendering context of the canvas.
+ * @param {HTMLCanvasElement} canvas The canvas element to draw on.
+ * @param {string} text The text to draw.
+ */
 function drawTextOnImage(ctx, canvas, text) {
-  if (!settings.showTextOnImage || !text) return;
+    // 1. Exit if the feature is disabled or there's no text.
+    if (!settings.showTextOnImage || !text) return;
 
-  const fontSize = settings.dynamicFontSize ? getOptimalFontSize(text, maxWidth, { width: canvas.width, height: canvas.height }) : settings.fontSize;
-  ctx.font = `bold ${fontSize}px Arial, sans-serif`;
-  
-  const lines = wrapText(ctx, text, canvas.width - 100); // Helper to wrap text
-  
-  // FIXED: Overflow issue by calculating background size from actual text metrics.
-  const longestLine = lines.reduce((a, b) => (ctx.measureText(a).width > ctx.measureText(b).width) ? a : b);
-  const textMetrics = ctx.measureText(longestLine);
-  const textBlockWidth = textMetrics.width;
-  
-  const lineHeight = fontSize * 1.2;
-  const padding = fontSize; // Generous padding
-  const backgroundWidth = textBlockWidth + (padding * 2);
-  const backgroundHeight = (lines.length * lineHeight) + (padding * 2);
+    // 2. Determine the optimal font size based on settings.
+    const fontSize = getOptimalFontSize(text, canvas.width);
+    ctx.font = `bold ${fontSize}px Arial, sans-serif`;
 
-  let startY;
-  switch (settings.textPosition) {
-    case 'top':
-      startY = 30;
-      break;
-    case 'center':
-      startY = (canvas.height - backgroundHeight) / 2;
-      break;
-    case 'bottom':
-    default:
-      startY = canvas.height - backgroundHeight - 30;
-      break;
-  }
-  
-  // Draw background with rounded corners for better look
-  if (settings.roundedBackground) {
-    drawRoundedRect(ctx, 50, startY, canvas.width - 100, backgroundHeight, 12);
-  } else {
-    ctx.fillStyle = settings.textBackgroundColor;
-    ctx.fillRect(50, startY, canvas.width - 100, backgroundHeight);
-  }
-  
-  // NEW: Random color logic
-  let textColor = settings.textColor;
-  let textBgColor = settings.textBackgroundColor;
+    // 3. Wrap the text into multiple lines that fit the canvas width.
+    // We leave a generous padding based on the font size.
+    const lines = wrapText(ctx, text, canvas.width - (fontSize * 2.5));
+    if (lines.length === 0) return; // Exit if there's nothing to draw.
 
-  if (settings.randomTextBgColor || settings.randomTextColor) {
-      const { bgColor, textColor: highContrastColor } = getRandomHighContrastColors();
-      if (settings.randomTextBgColor) {
-          const opacity = settings.textBackgroundColor.split(',')[3] || '0.7)';
-          const rgb = bgColor.match(/\w\w/g).map(x => parseInt(x, 16));
-          textBgColor = `rgba(${rgb[0]},${rgb[1]},${rgb[2]},${opacity}`;
-      }
-      if (settings.randomTextColor) {
-          textColor = highContrastColor;
-      }
-  }
-  
-  // Draw background with calculated size
-  if (settings.roundedBackground) {
-      drawRoundedRect(ctx, (canvas.width - backgroundWidth) / 2, startY, backgroundWidth, backgroundHeight, 15, textBgColor);
-  } else {
-      ctx.fillStyle = textBgColor;
-      ctx.fillRect((canvas.width - backgroundWidth) / 2, startY, backgroundWidth, backgroundHeight);
-  }
+    // 4. Calculate the precise dimensions of the text block.
+    const longestLine = lines.reduce((a, b) => (ctx.measureText(a).width > ctx.measureText(b).width) ? a : b);
+    const textBlockWidth = ctx.measureText(longestLine).width;
+    const lineHeight = fontSize * 1.2;
+    const padding = fontSize; // Padding around the text.
+    const backgroundWidth = textBlockWidth + (padding * 2);
+    const backgroundHeight = (lines.length * lineHeight) + padding;
 
-  // Draw text
-  ctx.fillStyle = textColor;
+    // 5. Calculate the vertical position of the text block based on settings.
+    let startY;
+    switch (settings.textPosition) {
+        case 'top':
+            startY = 50;
+            break;
+        case 'bottom':
+            startY = canvas.height - backgroundHeight - 50;
+            break;
+        default: // 'center'
+            startY = (canvas.height - backgroundHeight) / 2;
+            break;
+    }
+
+    // 6. Determine the final colors to use (user-defined or random with high contrast).
+    let textColor = settings.textColor;
+    let textBgColor = settings.textBackgroundColor;
+
+    if (settings.randomTextBgColor || settings.randomTextColor) {
+        const { bgColor, textColor: highContrastColor } = getRandomHighContrastColors();
+        if (settings.randomTextBgColor) {
+            const opacityMatch = textBgColor.match(/[\d.]+\)/); // Robustly get the opacity
+            const opacity = opacityMatch ? opacityMatch[0] : '0.7)';
+            const rgb = bgColor.match(/\w\w/g).map(x => parseInt(x, 16));
+            textBgColor = `rgba(${rgb.join(',')},${opacity}`;
+        }
+        if (settings.randomTextColor) {
+            textColor = highContrastColor;
+        }
+    }
+
+    // 7. Draw the text background (only once).
+    // It's centered horizontally using the calculated width.
+    const startX = (canvas.width - backgroundWidth) / 2;
+    if (settings.roundedBackground) {
+        drawRoundedRect(ctx, startX, startY, backgroundWidth, backgroundHeight, 15, textBgColor);
+    } else {
+        ctx.fillStyle = textBgColor;
+        ctx.fillRect(startX, startY, backgroundWidth, backgroundHeight);
+    }
+
+    // 8. Prepare text styles (shadow, color, alignment).
+    if (settings.textShadow) {
+        ctx.shadowColor = 'rgba(0,0,0,0.5)';
+        ctx.shadowBlur = 4;
+        ctx.shadowOffsetX = 2;
+        ctx.shadowOffsetY = 2;
+    }
+    ctx.fillStyle = textColor;
     ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
+    ctx.textBaseline = 'middle';
 
-  lines.forEach((line, index) => {
-    ctx.fillText(line, canvas.width / 2, startY + padding + (index * lineHeight) + (lineHeight / 2));
-  });
+    // 9. Draw the text line by line over the background.
+    lines.forEach((line, index) => {
+        const yPos = startY + (padding / 2) + (index * lineHeight) + (lineHeight / 2);
+        ctx.fillText(line, canvas.width / 2, yPos);
+    });
 
-  
-  // Add text shadow if enabled
-  if (settings.textShadow) {
-    ctx.shadowColor = 'rgba(0,0,0,0.5)';
-    ctx.shadowBlur = 3;
-    ctx.shadowOffsetX = 2;
-    ctx.shadowOffsetY = 2;
-  }
-  
-  displayLines.forEach((line, index) => {
-    const y = startY + padding + (index * lineHeight) + (fontSize / 2); // ✅ FIXED: use fontSize instead of optimalFontSize
-    ctx.fillText(line, canvas.width / 2, y);
-  });
-  
-  // Reset shadow
-  ctx.shadowColor = 'transparent';
-  ctx.shadowBlur = 0;
-  ctx.shadowOffsetX = 0;
-  ctx.shadowOffsetY = 0;
-  
-  // ✅ FIXED: use fontSize instead of optimalFontSize
-  console.log(`Text: "${text.substring(0, 30)}..." | Length: ${text.length} | Font Size: ${fontSize}px | Dynamic: ${settings.dynamicFontSize}`);
+    // 10. Reset shadow so it doesn't affect other drawings (like icons).
+    ctx.shadowColor = 'transparent';
+    ctx.shadowBlur = 0;
+    ctx.shadowOffsetX = 0;
+    ctx.shadowOffsetY = 0;
 }
 
 // NEW: Helper for drawTextOnImage
@@ -455,22 +535,21 @@ function wrapText(ctx, text, maxWidth) {
 }
 
 // Helper function for rounded rectangles
-function drawRoundedRect(ctx, x, y, width, height, radius) {
-  ctx.fillStyle = settings.textBackgroundColor;
-  ctx.beginPath();
-  ctx.moveTo(x + radius, y);
-  ctx.lineTo(x + width - radius, y);
-  ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
-  ctx.lineTo(x + width, y + height - radius);
-  ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
-  ctx.lineTo(x + radius, y + height);
-  ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
-  ctx.lineTo(x, y + radius);
-  ctx.quadraticCurveTo(x, y, x + radius, y);
-  ctx.closePath();
-  ctx.fill();
+function drawRoundedRect(ctx, x, y, width, height, radius, color) {
+    ctx.fillStyle = color; // Use the provided color, not the global setting
+    ctx.beginPath();
+    ctx.moveTo(x + radius, y);
+    ctx.lineTo(x + width - radius, y);
+    ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
+    ctx.lineTo(x + width, y + height - radius);
+    ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+    ctx.lineTo(x + radius, y + height);
+    ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
+    ctx.lineTo(x, y + radius);
+    ctx.quadraticCurveTo(x, y, x + radius, y);
+    ctx.closePath();
+    ctx.fill();
 }
-
 function generateRandomBackground(canvas, ctx) {
   const patterns = ['gradient', 'noise', 'geometric', 'wave', 'circles', 'stripes'];
   const pattern = settings.backgroundPattern === 'random' ? 
@@ -607,91 +686,70 @@ function generateRandomBackground(canvas, ctx) {
 }
 
 async function processClipboard() {
-  try {
-    const text = clipboard.readText();
-    
-    if (!text || text.trim().length === 0) {
-      showNotification('❌ No text found in clipboard', 'error');
-      return;
-    }
-    
-    if (text.length > 2000) {
-      showNotification('❌ Text too long (max 2000 characters)', 'error');
-      return;
-    }
+    try {
+        const text = clipboard.readText();
+        if (!text || text.trim().length === 0) {
+            showNotification('❌ No text in clipboard', 'error');
+            return;
+        }
 
-     let canvasWidth, canvasHeight;
+        let canvasWidth, canvasHeight;
+        if (settings.autoSize) {
+            const charCount = text.length;
+            const baseArea = 800 * 450;
+            const extraAreaPerChar = charCount < 300 ? 500 : 350;
+            const totalArea = baseArea + (charCount * extraAreaPerChar);
+            const aspectRatio = parseFloat(settings.aspectRatio) || 1.777;
+            
+            canvasHeight = Math.sqrt(totalArea / aspectRatio);
+            canvasWidth = canvasHeight * aspectRatio;
 
-    // NEW: Auto-size logic
-    if (settings.autoSize) {
-        const charCount = text.length;
-        // Formula: Start with a base area, then add area per character.
-        const baseArea = 800 * 450;
-        const extraArea = charCount * 400; // Adjust this multiplier to control growth
-        const totalArea = baseArea + extraArea;
+            canvasWidth = Math.round(Math.max(600, Math.min(canvasWidth, 1920)));
+            canvasHeight = Math.round(Math.max(400, Math.min(canvasHeight, 1080)));
+        } else {
+            canvasWidth = settings.imageSize.width;
+            canvasHeight = settings.imageSize.height;
+        }
+
+        showNotification('🔄 Processing...', 'info');
         
-        const aspectRatio = parseFloat(settings.aspectRatio);
+        // 1. Create the canvas with the correct dimensions
+        const canvas = createCanvas(canvasWidth, canvasHeight);
+        const ctx = canvas.getContext('2d');
         
-        canvasHeight = Math.sqrt(totalArea / aspectRatio);
-        canvasWidth = canvasHeight * aspectRatio;
+        // 2. Draw all visual elements
+        generateRandomBackground(canvas, ctx);
+        drawCornerIcons(ctx, canvas);
+        drawTextOnImage(ctx, canvas, text);
+        
+        // 3. Get image data and embed text
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const modifiedImageData = embedTextInImage(imageData, text);
+        if (!modifiedImageData) {
+            showNotification('❌ Text too long for this image size.', 'error');
+            return;
+        }
 
-        // Enforce min/max dimensions
-        canvasWidth = Math.max(600, Math.min(canvasWidth, 1920));
-        canvasHeight = Math.max(400, Math.min(canvasHeight, 1080));
-    } else {
-        canvasWidth = settings.imageSize.width;
-        canvasHeight = settings.imageSize.height;
+        // 4. Put modified data back and create buffer
+        ctx.putImageData(modifiedImageData, 0, 0);
+        const buffer = canvas.toBuffer('image/png', { compressionLevel: settings.compressionLevel });
+        
+        // 5. Copy to clipboard and notify user
+        clipboard.writeImage(nativeImage.createFromBuffer(buffer));
+        
+        const sizeKB = (buffer.length / 1024).toFixed(1);
+        showNotification(`✅ Embedded ${text.length} chars (${sizeKB}KB)`, 'success');
+        
+        if (mainWindow) {
+            mainWindow.webContents.send('text-processed', {
+                originalText: text,
+                imageSize: buffer.length,
+            });
+        }
+    } catch (error) {
+        console.error('Error processing clipboard:', error);
+        showNotification('❌ Error: ' + error.message, 'error');
     }
-    
-    showNotification('🔄 Processing...', 'info');
-    
-    const canvas = createCanvas(settings.imageSize.width, settings.imageSize.height);
-    const ctx = canvas.getContext('2d');
-    
-    // Generate background
-    generateRandomBackground(canvas, ctx);
-    
-    // Draw corner icons
-    drawCornerIcons(ctx, canvas);
-    
-    // Draw text on image
-    drawTextOnImage(ctx, canvas, text);
-    
-    // Get image data for steganography
-    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-    
-    // Embed text using steganography
-    const modifiedImageData = embedTextInImage(imageData, text);
-    
-    if (!modifiedImageData) {
-      showNotification('❌ Failed to embed text - text too long for image size', 'error');
-      return;
-    }
-    
-    // Put modified image data back to canvas
-    ctx.putImageData(modifiedImageData, 0, 0);
-    
-    // Convert to buffer and copy to clipboard
-    const buffer = canvas.toBuffer('image/png', { compressionLevel: settings.compressionLevel });
-    const image = nativeImage.createFromBuffer(buffer);
-    
-    clipboard.writeImage(image);
-    
-    const sizeKB = (buffer.length / 1024).toFixed(1);
-    showNotification(`✅ Embedded ${text.length} chars (${sizeKB}KB)`, 'success');
-    
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send('text-processed', {
-        originalText: text,
-        imageSize: buffer.length,
-        settings: settings
-      });
-    }
-    
-  } catch (error) {
-    console.error('Error processing clipboard:', error);
-    showNotification('❌ Error: ' + error.message, 'error');
-  }
 }
 
 async function extractFromClipboard() {
@@ -808,11 +866,115 @@ function showNotification(message, type = 'info') {
   }
 }
 
+// ===================================================================
+// START: Application Startup Logic
+// ===================================================================
+
+/**
+ * This function contains all the logic for starting the app in GUI mode.
+ * It will only be called if the app is NOT launched with a CLI flag.
+ */
+function startGuiApp() {
+    // Enforce single instance lock for the GUI app.
+    // If another instance is running, this instance will quit.
+    const gotTheLock = app.requestSingleInstanceLock();
+    if (!gotTheLock) {
+        app.quit();
+        return;
+    }
+
+    // This event fires in the primary instance when a second instance is launched.
+    app.on('second-instance', (event, commandLine, workingDirectory) => {
+        // We should focus our window.
+        if (mainWindow) {
+            if (mainWindow.isMinimized()) mainWindow.restore();
+            mainWindow.show();
+            mainWindow.focus();
+        }
+    });
+
+    // All app setup happens inside the whenReady promise.
+    app.whenReady().then(() => {
+        loadSettings();
+        createWindow();
+        createTray();
+
+        // Register global shortcuts
+        const embedRet = globalShortcut.register('CommandOrControl+Shift+V', processClipboard);
+        const extractRet = globalShortcut.register('CommandOrControl+Shift+E', extractFromClipboard);
+
+        if (embedRet && extractRet) {
+            showNotification('🚀 Ready! Ctrl+Shift+V: Embed | Ctrl+Shift+E: Extract', 'success');
+        } else {
+            showNotification('⚠️ Some global shortcuts failed to register.', 'error');
+            console.error('Failed to register global shortcuts. They might be in use by another application.');
+        }
+
+        console.log('✅ GUI Application initialized successfully');
+    });
+
+    // Standard app event listeners for the GUI
+    app.on('window-all-closed', (event) => {
+        // On Windows & Linux, hiding on close is handled by the window's 'close' event.
+        // This prevents the app from quitting.
+        event.preventDefault();
+    });
+
+    app.on('activate', () => {
+        // On macOS, re-create a window when the dock icon is clicked and there are no other windows.
+        if (BrowserWindow.getAllWindows().length === 0) {
+            createWindow();
+        } else {
+            mainWindow.show();
+        }
+    });
+}
+
+
+async function saveImageFromClipboard() {
+    try {
+        const image = clipboard.readImage();
+        if (image.isEmpty()) {
+            showNotification('❌ No image found on the clipboard.', 'error');
+            return { success: false, message: 'No image on clipboard.' };
+        }
+
+        const result = await dialog.showSaveDialog(mainWindow, {
+            title: 'Save Image As...',
+            defaultPath: path.join(app.getPath('downloads'), 'clipboard-image.png'),
+            filters: [
+                { name: 'PNG Image', extensions: ['png'] },
+                { name: 'JPEG Image', extensions: ['jpg', 'jpeg'] }
+            ]
+        });
+
+        if (result.canceled || !result.filePath) {
+            return { success: true, message: 'Save cancelled.' }; // Not an error, just an action
+        }
+
+        const filePath = result.filePath;
+        const buffer = filePath.toLowerCase().endsWith('.png') ? image.toPNG() : image.toJPEG(90);
+
+        fs.writeFileSync(filePath, buffer);
+        
+        const fileName = path.basename(filePath);
+        showNotification(`✅ Image saved successfully as ${fileName}`, 'success');
+        return { success: true, message: `Saved as ${fileName}` };
+
+    } catch (error) {
+        console.error('Failed to save image from clipboard:', error);
+        showNotification('❌ Failed to save image: ' + error.message, 'error');
+        return { success: false, message: error.message };
+    }
+}
+
 // IPC Handlers - Define once only
 ipcMain.handle('update-settings', (event, newSettings) => {
-    // If null, reset to defaults. Otherwise, merge with current settings.
     settings = newSettings === null ? { ...defaultSettings } : { ...settings, ...newSettings };
     saveSettings();
+    if (mainWindow) {
+        mainWindow.webContents.send('settings-loaded', settings);
+    }
     return settings;
 });
 
@@ -820,23 +982,13 @@ ipcMain.handle('get-settings', async () => {
   return settings;
 });
 
-ipcMain.handle('extract-from-file', async () => {
-  return await extractFromFile();
-});
-
 ipcMain.handle('process-clipboard', async () => {
   return await processClipboard();
 });
 
-ipcMain.handle('extract-clipboard', async () => {
-  return await extractFromClipboard();
-});
-
-// Add this with your other IPC handlers
+// This is the primary handler for UI-triggered extractions from the clipboard.
 ipcMain.handle('extract-from-clipboard', async () => {
   try {
-    console.log('IPC: extract-from-clipboard called');
-    
     const image = clipboard.readImage();
     if (image.isEmpty()) {
       return { success: false, error: 'No image found in clipboard' };
@@ -846,34 +998,14 @@ ipcMain.handle('extract-from-clipboard', async () => {
     const result = await extractTextFromBuffer(buffer);
     
     if (result.success) {
-      // Copy extracted text to clipboard
-      clipboard.writeText(result.text);
-      
-      // Send to main window for UI update
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send('text-extracted', {
-          extractedText: result.text,
-          success: true,
-          source: 'clipboard'
-        });
-      }
-      
-      return {
-        success: true,
-        extractedText: result.text
-      };
+      clipboard.writeText(result.text); // For convenience
+      return { success: true, extractedText: result.text };
     } else {
-      return {
-        success: false,
-        error: result.error
-      };
+      return { success: false, error: result.error };
     }
   } catch (error) {
     console.error('Error in extract-from-clipboard IPC:', error);
-    return {
-      success: false,
-      error: error.message
-    };
+    return { success: false, error: error.message };
   }
 });
 
@@ -883,12 +1015,8 @@ ipcMain.handle('get-clipboard-image', async () => {
     if (image.isEmpty()) {
       return { success: false, error: 'No image in clipboard' };
     }
-    
     const buffer = image.toPNG();
-    return {
-      success: true,
-      imageData: Array.from(buffer) // Convert buffer to array for transfer
-    };
+    return { success: true, imageData: Array.from(buffer) };
   } catch (error) {
     return { success: false, error: error.message };
   }
@@ -898,48 +1026,56 @@ ipcMain.handle('extract-from-buffer', async (event, bufferArray) => {
   try {
     const buffer = Buffer.from(bufferArray);
     const result = await extractTextFromBuffer(buffer);
-    
     if (result.success) {
-      // Copy extracted text to clipboard
-      clipboard.writeText(result.text);
-      
-      return {
-        success: true,
-        text: result.text
-      };
+      clipboard.writeText(result.text); // For convenience
+      return { success: true, text: result.text };
     } else {
-      return {
-        success: false,
-        error: result.error
-      };
+      return { success: false, error: result.error };
     }
   } catch (error) {
     console.error('Error in extract-from-buffer IPC:', error);
-    return {
-      success: false,
-      error: error.message
-    };
+    return { success: false, error: error.message };
   }
 });
 
-// App Event Handlers
-app.whenReady().then(() => {
-  loadSettings();
-  createWindow();
-  createTray();
-  
-  // Register global shortcuts
-  const embedRet = globalShortcut.register('CommandOrControl+Shift+V', processClipboard);
-  const extractRet = globalShortcut.register('CommandOrControl+Shift+E', extractFromClipboard);
-  
-  if (embedRet && extractRet) {
-    showNotification('🚀 Ready! Ctrl+Shift+V: Embed | Ctrl+Shift+E: Extract', 'success');
-  } else {
-    showNotification('⚠️ Some shortcuts failed to register', 'error');
-  }
-  
-  console.log('✅ Application initialized successfully');
+ipcMain.handle('save-clipboard-image', async () => {
+    return await saveImageFromClipboard();
 });
+
+// Note: We keep 'extract-from-file' because the UI might have a button that needs it,
+// even though the tray menu calls the function directly.
+ipcMain.handle('extract-from-file', async () => {
+  return await extractFromFile();
+});
+
+
+// ===================================================================
+// --- Main Application Entry Point ---
+// ===================================================================
+
+// This is the first piece of logic that runs.
+// It checks command-line arguments to decide whether to run in CLI mode or GUI mode.
+const extractFlagIndex = process.argv.indexOf('--extract');
+
+if (extractFlagIndex !== -1) {
+    // --- CLI Mode ---
+    const imagePath = process.argv[extractFlagIndex + 1];
+    if (!imagePath) {
+        console.error('Usage: your-app-name --extract /path/to/image.png');
+        process.exit(1);
+    }
+    // The app must be 'ready' before we can use native modules like canvas safely.
+    app.whenReady().then(() => handleCliExtraction(imagePath));
+} else {
+    // --- GUI Mode ---
+    startGuiApp();
+}
+
+app.on('will-quit', () => {
+  // Unregister all shortcuts when the application is quitting.
+  globalShortcut.unregisterAll();
+});
+
 
 app.on('window-all-closed', (event) => {
   event.preventDefault(); // Prevent app from quitting
@@ -958,27 +1094,18 @@ app.on('activate', () => {
   }
 });
 
-// Ensure single instance
-if (!app.requestSingleInstanceLock()) {
-  app.quit();
-} else {
-  app.on('second-instance', () => {
-    // Someone tried to run a second instance, focus our window instead
-    if (mainWindow) {
-      if (mainWindow.isMinimized()) mainWindow.restore();
-      mainWindow.show();
-      mainWindow.focus();
-    }
-  });
-}
 
-// Handle uncaught exceptions
 process.on('uncaughtException', (error) => {
   console.error('Uncaught Exception:', error);
-  showNotification('❌ Unexpected error occurred', 'error');
+  dialog.showErrorBox('Unexpected Error', 'A critical error occurred. Please check the logs.\n\n' + error.message);
+  // It's often recommended to quit after an uncaught exception.
+  app.quit();
 });
 
 process.on('unhandledRejection', (reason, promise) => {
   console.error('Unhandled Rejection at:', promise, 'reason:', reason);
-  showNotification('❌ Unexpected error occurred', 'error');
+  dialog.showErrorBox('Unhandled Promise Rejection', 'An unhandled promise rejection occurred. Please check the logs.\n\n' + reason);
 });
+
+
+

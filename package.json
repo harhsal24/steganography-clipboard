@@ -5,6 +5,7 @@
   "scripts": {
     "start": "electron .",
     "build": "electron-builder",
+    "rebuild": "electron-rebuild", 
     "dist": "electron-builder --win"
   },
   "author": "",

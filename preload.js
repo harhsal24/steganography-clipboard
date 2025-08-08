@@ -12,6 +12,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   extractFromFile: () => ipcRenderer.invoke('extract-from-file'),
    extractFromClipboard: () => ipcRenderer.invoke('extract-from-clipboard'),
 
-    getClipboardImage: () => ipcRenderer.invoke('get-clipboard-image'),
+  getClipboardImage: () => ipcRenderer.invoke('get-clipboard-image'),
   extractFromBuffer: (buffer) => ipcRenderer.invoke('extract-from-buffer', buffer),
+saveClipboardImage: () => ipcRenderer.invoke('save-clipboard-image'),
 });
