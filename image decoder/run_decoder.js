@@ -5,30 +5,61 @@ const path = require("path");
 const { XMLParser } = require("fast-xml-parser");
 const { decodeImage } = require("../decoder");
 
-// NEW: Helper function to convert our internal path array to a standard XPath expression.
+// NEW: Define which attributes to prioritize for XPath indexing.
+const INDEXING_ATTRIBUTES = ['ValuationUseType'];
+
 /**
- * Converts an internal path array into a valid XPath string.
- * e.g., ['AssetManifest', 'Section', '[0]'] becomes '/AssetManifest/Section[1]'
- * @param {string[]} pathArray - The array of path segments.
- * @returns {string} The formatted XPath string.
+ * REWRITTEN: Converts an internal path array into a standard XPath expression,
+ * prioritizing attributes for indexing over positional numbers.
+ * @param {string[]} pathArray - The array of path segments from findNodesWithPaths.
+ * @param {object} rootObj - The entire parsed JSON object from the XML.
+ * @returns {string} The formatted, attribute-aware XPath string.
  */
-function convertToXPath(pathArray) {
-  const xPathParts = [];
-  for (const segment of pathArray) {
-    // Check if the segment is an array index like '[0]'
-    if (segment.startsWith("[") && segment.endsWith("]")) {
-      // Get the last part added (the element this index applies to)
-      const lastPart = xPathParts.pop();
-      // Get the number, add 1 (for 1-based XPath), and append
-      const index = parseInt(segment.slice(1, -1)) + 1;
-      xPathParts.push(`${lastPart}[${index}]`);
-    } else {
-      // It's a regular element name
-      xPathParts.push(segment);
+function convertToXPath(pathArray, rootObj) {
+    let xPathParts = [];
+    let currentNode = rootObj;
+
+    for (let i = 0; i < pathArray.length; i++) {
+        let segment = pathArray[i];
+
+        if (!currentNode) break; // Stop if the path becomes invalid
+
+        // Check if the current segment is an element name (not an index)
+        if (!segment.startsWith("[")) {
+            xPathParts.push(segment);
+            currentNode = currentNode[segment]; // Move to the next level in the object
+        } else {
+            // The segment is an index like '[0]'. The previous part was the tag name.
+            const index = parseInt(segment.slice(1, -1));
+            const specificNodeInArray = currentNode[index];
+
+            let attributeFound = false;
+            if (specificNodeInArray) {
+                // Check for priority attributes on this specific node
+                for (const attr of INDEXING_ATTRIBUTES) {
+                    const attrKey = `@${attr}`; // The parser prefixes attributes with '@'
+                    if (specificNodeInArray[attrKey]) {
+                        const tagName = xPathParts.pop(); // Get the last tag name
+                        xPathParts.push(`${tagName}[@${attr}='${specificNodeInArray[attrKey]}']`);
+                        attributeFound = true;
+                        break; // Found our best attribute, stop searching
+                    }
+                }
+            }
+
+            // If no priority attribute was found, fall back to positional index
+            if (!attributeFound) {
+                const tagName = xPathParts.pop();
+                xPathParts.push(`${tagName}[${index + 1}]`); // Use 1-based index
+            }
+
+            // Advance to the specific node in the array for the next iteration
+            currentNode = specificNodeInArray;
+        }
     }
-  }
-  // Join all parts with '/' and add the leading '/' for an absolute path
-  return `/${xPathParts.join("/")}`;
+
+    // Filter out any potential undefined parts and join
+    return `/${xPathParts.filter(p => p).join("/")}`;
 }
 
 /**
