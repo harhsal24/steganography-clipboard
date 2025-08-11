@@ -3,79 +3,50 @@
 const fs = require("fs");
 const path = require("path");
 const { XMLParser } = require("fast-xml-parser");
-const { decodeImage } = require("../decoder");
+const { DOMParser } = require("xmldom");
+const xpath = require("xpath");
+const { decodeImage } = require("../decoder"); // Assuming your path is correct
 
-// NEW: Define which attributes to prioritize for XPath indexing.
-const INDEXING_ATTRIBUTES = ['ValuationUseType'];
+const INDEXING_ATTRIBUTES = ['id', 'name'];
 
-/**
- * REWRITTEN: Converts an internal path array into a standard XPath expression,
- * prioritizing attributes for indexing over positional numbers.
- * @param {string[]} pathArray - The array of path segments from findNodesWithPaths.
- * @param {object} rootObj - The entire parsed JSON object from the XML.
- * @returns {string} The formatted, attribute-aware XPath string.
- */
 function convertToXPath(pathArray, rootObj) {
     let xPathParts = [];
     let currentNode = rootObj;
-
     for (let i = 0; i < pathArray.length; i++) {
         let segment = pathArray[i];
-
-        if (!currentNode) break; // Stop if the path becomes invalid
-
-        // Check if the current segment is an element name (not an index)
+        if (!currentNode) break;
         if (!segment.startsWith("[")) {
             xPathParts.push(segment);
-            currentNode = currentNode[segment]; // Move to the next level in the object
+            currentNode = currentNode[segment];
         } else {
-            // The segment is an index like '[0]'. The previous part was the tag name.
             const index = parseInt(segment.slice(1, -1));
             const specificNodeInArray = currentNode[index];
-
             let attributeFound = false;
             if (specificNodeInArray) {
-                // Check for priority attributes on this specific node
                 for (const attr of INDEXING_ATTRIBUTES) {
-                    const attrKey = `@${attr}`; // The parser prefixes attributes with '@'
+                    const attrKey = `@${attr}`;
                     if (specificNodeInArray[attrKey]) {
-                        const tagName = xPathParts.pop(); // Get the last tag name
+                        const tagName = xPathParts.pop();
                         xPathParts.push(`${tagName}[@${attr}='${specificNodeInArray[attrKey]}']`);
                         attributeFound = true;
-                        break; // Found our best attribute, stop searching
+                        break;
                     }
                 }
             }
-
-            // If no priority attribute was found, fall back to positional index
             if (!attributeFound) {
                 const tagName = xPathParts.pop();
-                xPathParts.push(`${tagName}[${index + 1}]`); // Use 1-based index
+                xPathParts.push(`${tagName}[${index + 1}]`);
             }
-
-            // Advance to the specific node in the array for the next iteration
             currentNode = specificNodeInArray;
         }
     }
-
-    // Filter out any potential undefined parts and join
     return `/${xPathParts.filter(p => p).join("/")}`;
 }
 
-/**
- * MODIFIED: Recursively searches for nodes by key and returns their value and path array.
- * @param {object} obj The object to search.
- * @param {string} targetKey The key to find.
- * @returns {Array<{pathArray: string[], value: any}>} An array of objects.
- */
 function findNodesWithPaths(obj, targetKey) {
   let results = [];
-
   function recurse(currentObj, currentPath) {
-    if (currentObj === null || typeof currentObj !== "object") {
-      return;
-    }
-
+    if (currentObj === null || typeof currentObj !== "object") return;
     if (Array.isArray(currentObj)) {
       currentObj.forEach((item, index) => {
         recurse(item, [...currentPath, `[${index}]`]);
@@ -84,108 +55,127 @@ function findNodesWithPaths(obj, targetKey) {
       for (const key in currentObj) {
         const newPath = [...currentPath, key];
         if (key === targetKey) {
-          // MODIFIED: Store the raw path array instead of a joined string
-          results.push({
-            pathArray: newPath,
-            value: currentObj[key],
-          });
+          results.push({ pathArray: newPath, value: currentObj[key] });
         }
         recurse(currentObj[key], newPath);
       }
     }
   }
-
   recurse(obj, []);
   return results;
 }
 
-/**
- * Main function to run the tool.
- */
 async function main() {
-  // ... (no changes in the argument parsing part) ...
-  const xmlFilePath = process.argv[2];
-  const imagesFolderPath = process.argv[3];
+  // MODIFIED: Arguments are now source (template) XML, data XML, and images folder
+  const sourceXmlPath = process.argv[2];
+  const dataXmlPath = process.argv[3];
+  const imagesFolderPath = process.argv[4];
 
-  if (!xmlFilePath || !imagesFolderPath) {
+  if (!sourceXmlPath || !dataXmlPath || !imagesFolderPath) {
     console.error("ERROR: Missing arguments.");
-    // ... (error message) ...
+    console.error("Usage: node run_decoder.js <source-xml> <data-xml> <images-folder>");
+    console.error("Example: node run_decoder.js ./xmls/template.xml ./xmls/data.xml ./images");
     process.exit(1);
   }
 
   const outputFolderName = "output";
   fs.mkdirSync(outputFolderName, { recursive: true });
-  const xmlBaseName = path.basename(xmlFilePath, path.extname(xmlFilePath));
-  const outputFilePath = path.join(outputFolderName, `${xmlBaseName}.txt`);
+  const xmlBaseName = path.basename(dataXmlPath, path.extname(dataXmlPath));
+  const outputFilePath = path.join(outputFolderName, `${xmlBaseName}_output.txt`);
   const outputLines = [];
 
-  // ... (no changes in the XML reading part) ...
-  console.log(`Reading XML file from: ${xmlFilePath}`);
-  let jsonObj;
+  // --- STEP 1: Generate a list of target XPaths from the source file ---
+  console.log(`Generating XPaths from source file: ${sourceXmlPath}`);
+  let targetXPaths = [];
   try {
-    const xmlData = fs.readFileSync(xmlFilePath, "utf-8");
-    const parser = new XMLParser();
-    jsonObj = parser.parse(xmlData);
+    const sourceXmlData = fs.readFileSync(sourceXmlPath, "utf-8");
+    const parser = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: "@" });
+    const sourceJsonObj = parser.parse(sourceXmlData);
+    const nodesToFind = findNodesWithPaths(sourceJsonObj, "ImageFileLocationIdentifier");
+    
+    // Convert the found paths into XPath strings
+    for (const node of nodesToFind) {
+        targetXPaths.push(convertToXPath(node.pathArray, sourceJsonObj));
+    }
   } catch (error) {
-    console.error(`Failed to read or parse XML file: ${error.message}`);
+    console.error(`Failed to read or parse source XML file: ${error.message}`);
     process.exit(1);
   }
 
-  console.log("Searching for 'ImageFileLocationIdentifier' nodes...");
-  const imageNodes = findNodesWithPaths(jsonObj, "ImageFileLocationIdentifier");
-
-  if (imageNodes.length === 0) {
-    console.log("No images found in the XML file.");
+  if (targetXPaths.length === 0) {
+    console.log("No 'ImageFileLocationIdentifier' nodes found in source file. Exiting.");
     return;
   }
+  console.log(`Found ${targetXPaths.length} XPath(s) to query in the data file.`);
 
-  console.log(`Found ${imageNodes.length} potential image reference(s).`);
+  // --- STEP 2: Prepare the data XML file for querying ---
+  console.log(`\nReading data file for matching: ${dataXmlPath}`);
+  let dataDoc;
+  try {
+    const dataXmlData = fs.readFileSync(dataXmlPath, "utf-8");
+    dataDoc = new DOMParser().parseFromString(dataXmlData);
+  } catch (error) {
+    console.error(`Failed to read or parse data XML file: ${error.message}`);
+    process.exit(1);
+  }
+
   console.log("--------------------------------------------------");
 
-  for (const node of imageNodes) {
-    const xpath = convertToXPath(node.pathArray);
-
-    const rawXmlValue = node.value;
-
-    if (typeof rawXmlValue !== "string" || rawXmlValue.trim() === "") {
-      console.warn(`\nSkipping invalid or empty entry with XPath: ${xpath}`);
-      continue;
+  // --- STEP 3: Loop through generated XPaths and query the data file ---
+  for (const currentXPath of targetXPaths) {
+    console.log(`\nQuerying with generated XPath: ${currentXPath}`);
+    
+    let foundNodes;
+    try {
+        foundNodes = xpath.select(currentXPath, dataDoc);
+    } catch(e) {
+        console.error(`❌ Invalid XPath expression "${currentXPath}": ${e.message}`);
+        continue;
     }
 
-    const filename = path.basename(rawXmlValue.trim());
+    if (foundNodes.length === 0) {
+        console.log("   -> No nodes matched this XPath in the data file.");
+        continue;
+    }
+    
+    for (const foundNode of foundNodes) {
+        const rawXmlValue = foundNode.textContent;
+        if (typeof rawXmlValue !== "string" || rawXmlValue.trim() === "") {
+            console.warn("   -> Matched node has no value. Skipping.");
+            continue;
+        }
 
-    const imagePath = path.join(imagesFolderPath, filename);
+        const filename = path.basename(rawXmlValue.trim());
+        const imagePath = path.join(imagesFolderPath, filename);
+        console.log(`   -> Found match. Processing file: ${filename}`);
 
-    console.log(`\nProcessing image: ${filename} (from XPath: ${xpath})`);
-
-    try {
-      const result = await decodeImage(imagePath);
-      let outputLine;
-      if (result.success) {
-        console.log(`✅ Success! Decoded Text: ${result.text}`);
-
-        outputLine = `${result.text} : ${xpath}`;
-      } else {
-        console.error(`❌ Error decoding ${filename}: ${result.error}`);
-        outputLine = `DECODING_ERROR: ${result.error} : ${xpath}`;
-      }
-      outputLines.push(outputLine);
-    } catch (e) {
-      console.error(
-        `❌ A critical error occurred while processing ${filename}: ${e.message}`
-      );
-      const criticalErrorLine = `CRITICAL_ERROR: ${e.message} : ${xpath}`;
-      outputLines.push(criticalErrorLine);
+        try {
+            const result = await decodeImage(imagePath);
+            let outputLine = result.success 
+                ? `${result.text} : ${currentXPath}`
+                : `DECODING_ERROR: ${result.error} : ${currentXPath}`;
+            
+            if (result.success) {
+                 console.log(`   ✅ Success! Decoded Text: ${result.text}`);
+            } else {
+                 console.error(`   ❌ Error decoding ${filename}: ${result.error}`);
+            }
+            outputLines.push(outputLine);
+        } catch (e) {
+            console.error(`   ❌ A critical error occurred while processing ${filename}: ${e.message}`);
+            const criticalErrorLine = `CRITICAL_ERROR: ${e.message} : ${currentXPath}`;
+            outputLines.push(criticalErrorLine);
+        }
     }
   }
 
+  // --- STEP 4: Write output ---
   try {
     fs.writeFileSync(outputFilePath, outputLines.join("\n"), "utf-8");
     console.log("\n--------------------------------------------------");
     console.log(`✅ Processing complete. Output written to: ${outputFilePath}`);
   } catch (error) {
-    console.error("\n--------------------------------------------------");
-    console.error(`❌ Failed to write output file: ${error.message}`);
+    console.error("\n--------------------------------------------------", `❌ Failed to write output file: ${error.message}`);
   }
 }
 
