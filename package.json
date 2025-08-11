@@ -5,17 +5,17 @@
   "scripts": {
     "start": "electron .",
     "build": "electron-builder",
-    "rebuild": "electron-rebuild", 
+    "rebuild": "electron-rebuild",
     "dist": "electron-builder --win"
   },
   "author": "",
   "license": "ISC",
   "description": "",
-
   "dependencies": {
-    "canvas": "^3.1.2"
+    "canvas": "^3.1.2",
+    "fast-xml-parser": "^5.2.5"
   },
-   "devDependencies": {
+  "devDependencies": {
     "electron": "^37.2.6",
     "electron-builder": "^26.0.12"
   },
@@ -38,7 +38,7 @@
       "target": "nsis",
       "icon": "assets/icon.ico"
     },
-     "nsis": {
+    "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true
     }

@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<AssetManifest>
+    <ManifestInfo>
+        <Version>1.1</Version>
+        <Author>Test Data Generator</Author>
+        <Description>A list of assets containing hidden data for decoding.</Description>
+    </ManifestInfo>
+
+    <Section name="PrimaryMessages">
+        <!-- A standard, top-level asset entry -->
+        <Asset id="ASSET_001">
+            <Type>Image</Type>
+            <Description>First secret message about the project launch.</Description>
+            <ImageFileLocationIdentifier>image1.png</ImageFileLocationIdentifier>
+        </Asset>
+        
+        <!-- Another standard entry -->
+        <Asset id="ASSET_002">
+            <Type>Image</Type>
+            <Description>Second message with coordinates.</Description>
+            <ImageFileLocationIdentifier>secret_photo.png</ImageFileLocationIdentifier>
+        </Asset>
+    </Section>
+
+    <Section name="ArchivedData">
+        <SubSection name="Q3_Archive">
+            <!-- This one is more deeply nested to test the recursive search -->
+            <Record id="REC_XYZ">
+                <Metadata>
+                    <Source>OldSystem</Source>
+                    <ImageFileLocationIdentifier>archived_image.png</ImageFileLocationIdentifier>
+                </Metadata>
+                <Notes>This is an older file from the archive.</Notes>
+            </Record>
+        </SubSection>
+    </Section>
+
+    <Section name="IrrelevantData">
+        <!-- This section does NOT contain the target tag and should be ignored -->
+        <DataPacket>
+            <Content>Some random text data that is not an image.</Content>
+        </DataPacket>
+    </Section>
+    
+    <Section name="EdgeCases">
+        <!-- Your script should gracefully skip this empty tag -->
+        <Asset id="ASSET_003">
+            <Description>This asset has an empty identifier.</Description>
+            <ImageFileLocationIdentifier></ImageFileLocationIdentifier>
+        </Asset>
+        
+        <!-- Your script should also skip this tag containing only whitespace -->
+        <Asset id="ASSET_004">
+            <Description>This asset has a whitespace identifier.</Description>
+            <ImageFileLocationIdentifier>   </ImageFileLocationIdentifier>
+        </Asset>
+    </Section>
+
+</AssetManifest>
