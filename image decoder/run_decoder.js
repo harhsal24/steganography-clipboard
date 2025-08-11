@@ -76,7 +76,7 @@ function findNodesWithPaths(obj, targetKey) {
  * @param {string} imagesFolderPath - Path to the folder containing images.
  */
 async function runProcessingLogic(sourceXmlPath, dataXmlPath, imagesFolderPath) {
-    const outputFolderName = "output";
+  const outputFolderName = "output";
     fs.mkdirSync(outputFolderName, { recursive: true });
     const xmlBaseName = path.basename(dataXmlPath, path.extname(dataXmlPath));
     const outputFilePath = path.join(outputFolderName, `${xmlBaseName}_output.txt`);
@@ -87,7 +87,13 @@ async function runProcessingLogic(sourceXmlPath, dataXmlPath, imagesFolderPath) 
     let targetXPaths = [];
     try {
         const sourceXmlData = fs.readFileSync(sourceXmlPath, "utf-8");
-        const parser = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: "@" });
+        //  vvvvvvvvv THIS IS THE FIX vvvvvvvvvvv
+        // Ensure the parser is ALWAYS configured to read attributes.
+        const parser = new XMLParser({
+            ignoreAttributes: false,
+            attributeNamePrefix: "@",
+        });
+        //  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
         const sourceJsonObj = parser.parse(sourceXmlData);
         const nodesToFind = findNodesWithPaths(sourceJsonObj, "ImageFileLocationIdentifier");
         for (const node of nodesToFind) {
@@ -97,6 +103,7 @@ async function runProcessingLogic(sourceXmlPath, dataXmlPath, imagesFolderPath) 
         console.error(`ERROR: Failed to read or parse source file '${sourceXmlPath}'.\n${error.message}`);
         return;
     }
+    
     if (targetXPaths.length === 0) {
         console.log("No 'ImageFileLocationIdentifier' nodes found in source file. Exiting.");
         return;
