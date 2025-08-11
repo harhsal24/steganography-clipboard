@@ -1,3 +1,0 @@
-First secret message about the project launch. : /AssetManifest/Section[1]/Asset[1]/ImageFileLocationIdentifier
-DECODING_ERROR: File not found: images\secret_photo.png : /AssetManifest/Section[1]/Asset[2]/ImageFileLocationIdentifier
-DECODING_ERROR: File not found: images\archived_image.png : /AssetManifest/Section[2]/SubSection/Record/Metadata/ImageFileLocationIdentifier
