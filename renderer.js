@@ -202,6 +202,8 @@ function clearImagePreview() {
     currentImageData = null;
     document.getElementById('previewImg').src = '';
     document.getElementById('fileInput').value = ''; // Clear the file input
+    document.getElementById('extractResults').style.display = 'none';
+    extractedTextData = ''; 
     showStatus('🗑️ Image removed.', 'info');
 }
 
