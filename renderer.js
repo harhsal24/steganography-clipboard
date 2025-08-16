@@ -256,9 +256,12 @@ async function extractFromClipboard() {
 
     try {
         const result = await window.electronAPI.extractFromClipboard();
+
         if (result && result.success) {
+            // ✅ Pass along extracted text + preview image
             displayExtractionResult({
                 extractedText: result.extractedText,
+                image: result.image || null,   // add image field
                 success: true,
                 source: 'clipboard'
             });
@@ -273,6 +276,7 @@ async function extractFromClipboard() {
         btn.querySelector('span').textContent = '📋 Extract from Clipboard';
     }
 }
+
 
 // --- UI Display Functions ---
 
@@ -292,21 +296,43 @@ function displayProcessedResult(data) {
     lastProcessedDiv.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
-function displayExtractionResult(data) {
-    if (data.success) {
-        extractedTextData = data.extractedText;
-        document.getElementById('extractedLength').textContent = data.extractedText.length;
-        document.getElementById('extractedSource').textContent = data.source === 'file' ? (data.fileName || 'File') : 'Clipboard';
-        document.getElementById('extractedText').textContent = data.extractedText;
+function displayExtractionResult({ extractedText, image, success, source }) {
+    const extractResults = document.getElementById('extractResults');
+    const extractedTextEl = document.getElementById('extractedText');
+    const lengthEl = document.getElementById('extractedLength');
+    const sourceEl = document.getElementById('extractedSource');
 
-        extractResultsDiv.style.display = 'block';
-        showStatus(`✅ Extracted ${data.extractedText.length} characters!`, 'success');
-        extractResultsDiv.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    // If an image preview is provided, show it in the existing preview area
+    if (image) {
+        const dropContent = document.getElementById('dropContent');
+        const imagePreview = document.getElementById('imagePreview');
+        const previewImg = document.getElementById('previewImg');
+        if (previewImg) {
+            previewImg.src = image;
+            // show preview area and hide the drop content
+            imagePreview.style.display = 'flex';
+            if (dropContent) dropContent.style.display = 'none';
+        }
+    }
+
+    if (success) {
+        extractedTextData = extractedText || '';
+        extractedTextEl.textContent = extractedTextData;
+        lengthEl.textContent = extractedTextData.length || 0;
+        sourceEl.textContent = source || '-';
+        extractResults.style.display = 'block';
+        showStatus(`✅ Extracted from ${source}`, 'success');
     } else {
-        extractResultsDiv.style.display = 'none';
-        showStatus(`❌ Extraction failed: ${data.error}`, 'error');
+        extractedTextData = '';
+        extractedTextEl.textContent = '❌ Extraction failed.';
+        lengthEl.textContent = 0;
+        sourceEl.textContent = source || '-';
+        extractResults.style.display = 'block';
+        showStatus(`❌ ${ (typeof extractedText === 'string' && extractedText) || 'Extraction failed' }`, 'error');
     }
 }
+
+
 
 function showStatus(message, type = 'info') {
     const statusClass = type === 'success' ? 'success' : type === 'error' ? 'error' : 'info';
