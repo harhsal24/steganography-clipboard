@@ -5,118 +5,104 @@ const path = require('path');
 const readline = require('readline');
 
 /**
- * Filters a data file based on a list of XPaths from a definition file.
- * It produces two outputs: one with the matched lines, and another with any
- * XPaths from the definition file that were not found in the data file.
- * @param {string} definitionFilePath - Path to the text file containing XPaths.
- * @param {string} dataFilePath - Path to the text file containing lines in the format "value : /some/xpath".
- * @param {string} outputFilePath - Path where the filtered output will be saved.
+ * Usage:
+ *   node filter_by_xpath.js <definition-file.txt> <data-file.txt> <output-file.txt>
+ *
+ * Notes:
+ * - Definition file: one XPath per line. Lines starting with '#' or empty lines are ignored.
+ * - By default this performs a substring search: if a data line contains the XPath anywhere,
+ *   that line is copied to the output.
+ * - A separate file <output>_unmatched.txt is created listing definition XPaths that weren't found.
  */
+
 async function filterFileByXPaths(definitionFilePath, dataFilePath, outputFilePath) {
-    console.log("--- Starting XPath Filter Process ---");
+  console.log('--- Starting XPath Filter Process ---');
 
-    // --- Step 1: Read the definition file and store all XPaths in a Set ---
-    console.log(`[1/5] Reading definition XPaths from: ${path.basename(definitionFilePath)}`);
-    let definitionXPaths;
-    try {
-        const definitionFileContent = fs.readFileSync(definitionFilePath, 'utf-8');
-        definitionXPaths = new Set(
-            definitionFileContent.split(/\r?\n/)
-                .map(line => {
-                    const delimiterIndex = line.lastIndexOf(' : ');
-                    const xpath = delimiterIndex !== -1 
-                        ? line.substring(delimiterIndex + 3).trim() 
-                        : line.trim();
-                    return xpath;
-                })
-                .filter(line => line.length > 0)
-        );
-    } catch (error) {
-        console.error(`ERROR: Failed to read definition file '${definitionFilePath}'.\n${error.message}`);
-        return;
-    }
+  // 1) Read definitions
+  let defs;
+  try {
+    const raw = fs.readFileSync(definitionFilePath, 'utf8');
+    defs = raw.split(/\r?\n/)
+      .map(l => l.trim())
+      .filter(l => l.length > 0 && !l.startsWith('#')); // ignore blanks and comments
+  } catch (err) {
+    console.error(`ERROR: cannot read definition file '${definitionFilePath}': ${err.message}`);
+    process.exitCode = 2;
+    return;
+  }
 
-    if (definitionXPaths.size === 0) {
-        console.log("Definition file is empty or contains no valid XPaths. Exiting.");
-        return;
-    }
-    console.log(`   -> Found ${definitionXPaths.size} unique XPaths to use as a filter.`);
+  if (defs.length === 0) {
+    console.log('No XPaths found in definition file (after trimming and removing comments). Exiting.');
+    return;
+  }
 
-    const unfoundXPaths = new Set(definitionXPaths);
+  console.log(`Loaded ${defs.length} XPath(s) from '${path.basename(definitionFilePath)}'.`);
 
-    // --- Step 2: Read the data file line-by-line to find matches ---
-    console.log(`[2/5] Reading and filtering data from: ${path.basename(dataFilePath)}`);
-    const matchingLines = [];
-    let lineCount = 0;
-    
-    try {
-        const fileStream = fs.createReadStream(dataFilePath);
-        const rl = readline.createInterface({ input: fileStream, crlfDelay: Infinity });
+  // Keep a Set of unfound xpaths
+  const unfound = new Set(defs);
 
-        await new Promise((resolve) => {
-            rl.on('line', (line) => {
-                lineCount++;
-                const delimiterIndex = line.lastIndexOf(' : ');
-                if (delimiterIndex === -1) return;
-                const xpathPart = line.substring(delimiterIndex + 3).trim();
-                if (definitionXPaths.has(xpathPart)) {
-                    matchingLines.push(line);
-                    unfoundXPaths.delete(xpathPart);
-                }
-            });
-            rl.on('close', resolve);
-        });
-    } catch (error) {
-        console.error(`ERROR: Failed to read data file '${dataFilePath}'.\n${error.message}`);
-        return;
-    }
-    
-    console.log(`[3/5] Processed ${lineCount} lines and found ${matchingLines.length} matches.`);
+  // 2) Stream the data file and check each line for any xpath (substring search)
+  const matches = [];
+  let lineCount = 0;
 
-    // --- MODIFIED: Step 3 & 4 - Handle unmatched XPaths and write to a file ---
-    console.log(`[4/5] Auditing for unmatched definition XPaths...`);
-    if (unfoundXPaths.size > 0) {
-        console.warn(`   -> WARNING: Found ${unfoundXPaths.size} XPath(s) from the definition file that were NOT in the data file.`);
-        
-        try {
-            // Generate the filename for the unmatched paths file
-            const { dir, name, ext } = path.parse(outputFilePath);
-            const unmatchedFilePath = path.join(dir, `${name}_unmatched${ext}`);
+  try {
+    const rs = fs.createReadStream(dataFilePath);
+    const rl = readline.createInterface({ input: rs, crlfDelay: Infinity });
 
-            // Convert the Set to an array, join with newlines, and write to the file
-            const unmatchedContent = [...unfoundXPaths].join('\n');
-            fs.writeFileSync(unmatchedFilePath, unmatchedContent, 'utf-8');
-            
-            console.log(`   -> These unmatched XPaths have been saved to: ${unmatchedFilePath}`);
-        } catch(error) {
-            console.error(`   -> ERROR: Could not write unmatched XPaths file.\n${error.message}`);
+    for await (const line of rl) {
+      lineCount++;
+      if (!line) continue;
+
+      // For performance break on first match for this line
+      for (const xpath of defs) {
+        if (line.includes(xpath)) {
+          matches.push(line);
+          unfound.delete(xpath); // mark xpath as found (first occurrence suffice)
+          break;
         }
+      }
+    }
+  } catch (err) {
+    console.error(`ERROR: cannot read data file '${dataFilePath}': ${err.message}`);
+    process.exitCode = 3;
+    return;
+  }
+
+  console.log(`[processed] ${lineCount} lines --> ${matches.length} matched lines.`);
+
+  // 3) Write matches to output
+  try {
+    fs.writeFileSync(outputFilePath, matches.join('\n'), 'utf8');
+    console.log(`Wrote ${matches.length} matched lines to: ${outputFilePath}`);
+  } catch (err) {
+    console.error(`ERROR: failed to write output file '${outputFilePath}': ${err.message}`);
+  }
+
+  // 4) Write unmatched xpaths (if any)
+  const { dir, name, ext } = path.parse(outputFilePath);
+  const unmatchedPath = path.join(dir, `${name}_unmatched${ext || '.txt'}`);
+
+  try {
+    if (unfound.size > 0) {
+      fs.writeFileSync(unmatchedPath, [...unfound].join('\n'), 'utf8');
+      console.warn(`Saved ${unfound.size} unmatched XPath(s) to: ${unmatchedPath}`);
     } else {
-        console.log("   -> All definition XPaths were successfully found in the data file.");
+      fs.writeFileSync(unmatchedPath, '', 'utf8'); // create empty file to signal none unmatched
+      console.log('All XPaths were found at least once. Created empty unmatched file.');
     }
+  } catch (err) {
+    console.error(`ERROR: failed to write unmatched file '${unmatchedPath}': ${err.message}`);
+  }
 
-    // --- Step 5: Write the primary output file with matched lines ---
-    try {
-        fs.writeFileSync(outputFilePath, matchingLines.join('\n'), 'utf-8');
-        console.log(`[5/5] ✅ Success! Main output with matched lines written to: ${outputFilePath}`);
-    } catch (error) {
-        console.error(`ERROR: Failed to write to output file '${outputFilePath}'.\n${error.message}`);
-    }
+  console.log('--- Done ---');
 }
 
-// --- Main execution block (unchanged) ---
-function main() {
-    const args = process.argv.slice(2);
-    if (args.length !== 3) {
-        console.error("ERROR: Invalid number of arguments.");
-        console.error("\nUsage:");
-        console.error("  node filter_by_xpath.js <definition-file.txt> <data-file.txt> <output-file.txt>");
-        console.error("\nExample:");
-        console.error("  node filter_by_xpath.js ./definitions.txt ./data.txt ./filtered_output.txt");
-        process.exit(1);
-    }
-    const [definitionFilePath, dataFilePath, outputFilePath] = args;
-    filterFileByXPaths(definitionFilePath, dataFilePath, outputFilePath);
+// main
+if (require.main === module) {
+  const args = process.argv.slice(2);
+  if (args.length !== 3) {
+    console.error('Usage: node filter_by_xpath.js <definition-file.txt> <data-file.txt> <output-file.txt>');
+    process.exit(1);
+  }
+  filterFileByXPaths(...args);
 }
-
-main();
