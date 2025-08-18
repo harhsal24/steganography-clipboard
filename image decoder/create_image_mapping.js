@@ -1,55 +1,75 @@
 const fs = require("fs");
 const path = require("path");
 
+/** Indexing attributes used to pick the anchor node (last occurrence wins) */
+const INDEXING_ATTRIBUTES = ["ValuationUseType"];
+
 /**
  * Transforms a full, absolute XPath into a shorter, relative XPath
- * based on the last attribute-based anchor.
- * @param {string} absoluteXpath The full XPath from the source file.
- * @returns {string} The formatted, relative XPath.
+ * anchored at the last node that contains one of INDEXING_ATTRIBUTES.
+ * If no anchor found, falls back to the last 4 parts.
+ * Always removes a trailing ImageFileLocationIdentifier and prefixes tags with d:.
+ *
+ * Examples:
+ *  /root/ITEM/PROPERTY[@ValuationUseType='X']/SUB/IMAGEFILELOCATIONIDENTIFIER
+ *    -> //d:PROPERTY[@ValuationUseType='X']/d:SUB
+ *
+ * @param {string} absoluteXpath
+ * @returns {string}
  */
 function convertToRelativeXPath(absoluteXpath) {
-  if (!absoluteXpath || !absoluteXpath.startsWith('/')) {
-    return absoluteXpath; // Return as-is if malformed
+  if (!absoluteXpath || typeof absoluteXpath !== "string") return absoluteXpath;
+
+  // quickly bail if it doesn't look like an XPath
+  if (!absoluteXpath.startsWith("/")) return absoluteXpath;
+
+  // split into parts (remove empty parts from leading slash)
+  let parts = absoluteXpath.split("/").filter((p) => p && p.trim().length > 0);
+
+  // remove trailing ImageFileLocationIdentifier (case-insensitive)
+  if (parts.length > 0 && parts[parts.length - 1].toLowerCase() === "imagefilelocationidentifier") {
+    parts.pop();
   }
 
-  // 1. Split path into parts and remove the initial empty string and the final tag.
-  let parts = absoluteXpath.split('/').filter(p => p);
-  if (parts.length > 0 && parts[parts.length - 1].toLowerCase() === 'imagefilelocationidentifier') {
-      parts.pop();
-  }
+  if (parts.length === 0) return absoluteXpath;
 
-  // 2. Find the index of the last part that contains an attribute selector `[...]`
+  // find last part that contains any of the INDEXING_ATTRIBUTES (case-insensitive)
+  const lowerAttrs = INDEXING_ATTRIBUTES.map((a) => a.toLowerCase());
   let anchorIndex = -1;
   for (let i = parts.length - 1; i >= 0; i--) {
-    if (parts[i].includes('[')) {
-      anchorIndex = i;
-      break;
+    const lowerPart = parts[i].toLowerCase();
+    // check for attribute selectors containing the attribute name, e.g. [@ValuationUseType=  or [@ValuationUseType'
+    for (const attr of lowerAttrs) {
+      if (lowerPart.includes("@" + attr) || lowerPart.includes("[" + attr) || lowerPart.includes(`@${attr}`)) {
+        anchorIndex = i;
+        break;
+      }
     }
+    if (anchorIndex !== -1) break;
   }
 
-  // 3. If an anchor was found, slice the array from that point.
-  //    As a fallback, if no anchor is found, take the last 4 parts for context.
-  let relativeParts;
-  if (anchorIndex !== -1) {
-    relativeParts = parts.slice(anchorIndex);
-  } else {
-    // Fallback: If no attribute selector, the path is likely not complex.
-    // Taking the last few elements is a reasonable guess for a relative path.
-    relativeParts = parts.slice(Math.max(parts.length - 4, 0));
+  // if no attribute anchor found, fallback to last 4 parts for context
+  const relativeParts = anchorIndex !== -1 ? parts.slice(anchorIndex) : parts.slice(Math.max(parts.length - 4, 0));
+
+  // helper to prefix the tag name with d: while preserving indexes/attributes
+  // e.g. "ns:PROPERTY[@ValuationUseType='x']" -> "d:PROPERTY[@ValuationUseType='x']"
+  function prefixWithD(part) {
+    // capture optional namespace prefix and the local tag name
+    // also handle tag names that include hyphens/underscores/numbers
+    // pattern: optionalPrefix:TagName OR TagName (TagName = [A-Za-z0-9_-]+)
+    // then the rest (indexes/attributes) captured separately
+    const m = part.match(/^((?:[A-Za-z0-9_-]+:)?)([A-Za-z0-9_-]+)([\s\S]*)$/);
+    if (!m) return "d:" + part; // fallback
+    const localName = m[2];
+    const rest = m[3] || "";
+    return `d:${localName}${rest}`;
   }
 
-  // 4. Prefix every part with "d:" and re-join.
-  const prefixedParts = relativeParts.map(part => {
-    // This regex safely adds 'd:' to the beginning of the tag name,
-    // leaving attributes and array indices intact.
-    // e.g., 'PROPERTY[@...]' becomes 'd:PROPERTY[@...]'
-    // e.g., 'IMAGE[2]' becomes 'd:IMAGE[2]'
-    return part.replace(/^(\w+)/, 'd:$1');
-  });
+  const prefixed = relativeParts.map(prefixWithD);
 
-  // 5. Assemble the final relative path string.
-  return `//${prefixedParts.join('/')}`;
+  return `//${prefixed.join("/")}`;
 }
+
 
 
 /**
